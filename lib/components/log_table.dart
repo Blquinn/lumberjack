@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:easy_debounce/easy_debounce.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
 import '../logging.dart';
+import '../util/reverse_line_reader.dart';
 
 class LogTable extends StatelessWidget {
   const LogTable({
@@ -128,8 +127,7 @@ class LogFileDataSource extends DataGridSource {
     }
 
     if (backwards) {
-      var reader =
-          ReverseLineReader(file: file, position: lastReadPosBackwards);
+      var reader = await ReverseLineReader.create(file, lastReadPosBackwards);
       while (reader.hasMoreLines() && linesRead < linesToRead) {
         readLine(await reader.readLine());
       }
@@ -191,81 +189,5 @@ class LogFileDataSource extends DataGridSource {
           padding: const EdgeInsets.all(2.0),
           child: Text(columnText));
     }).toList());
-  }
-}
-
-// TODO: This is slow because dart:io sucks. Find a way to optimize.
-class ReverseLineReader {
-  static const int chunkSize = 2 << 10;
-
-  final File file;
-  int position;
-
-  static final Uint8List _newlineChars = const Utf8Encoder().convert("\r\n");
-  static int get crByte => _newlineChars[0];
-  static int get lfByte => _newlineChars[1];
-
-  ReverseLineReader({required this.file, required this.position});
-
-  Future init() async {
-    var size = await file.length();
-    var endSize = min(size, 2);
-    var bytes = await _readNBytes(endSize);
-    if (endSize == 1 && bytes[0] == lfByte) {
-      position += 1;
-    } else if (endSize == 2) {
-      if (bytes[0] != crByte) position += 1;
-      if (bytes[1] != lfByte) position += 1;
-    }
-  }
-
-  static void reverseList<T>(List<T> list) {
-    for (var i = 0; i < list.length / 2; i++) {
-      var temp = list[i];
-      list[i] = list[list.length - 1 - i];
-      list[list.length - 1 - i] = temp;
-    }
-  }
-
-  bool hasMoreLines() {
-    return position > 0;
-  }
-
-  Future<List<int>> readLine() async {
-    List<int> lineChars = [];
-
-    Outer:
-    while (true) {
-      if (position < 1) {
-        if (lineChars.isNotEmpty) break;
-        return lineChars;
-      }
-
-      var bts = await _readNBytes(chunkSize);
-      for (var i = bts.length - 1; i >= 0; i--) {
-        var char = bts[i];
-        if (char == lfByte) {
-          var offset = i;
-
-          if (i > 1 && bts[i - 1] == crByte) offset--;
-
-          position += offset;
-
-          break Outer;
-        }
-
-        lineChars.add(char);
-      }
-    }
-
-    reverseList(lineChars);
-    return lineChars;
-  }
-
-  Future<List<int>> _readNBytes(int size) {
-    var stream = file.openRead(position - size, position);
-    var bytes = stream.reduce((previous, element) => previous + element);
-    position -= size;
-    return bytes;
   }
 }

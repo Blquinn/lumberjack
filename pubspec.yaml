@@ -39,11 +39,14 @@ dependencies:
   syncfusion_flutter_datagrid: ^20.2.46
   logger: ^1.1.0
   easy_debounce: ^2.0.2+1
+  path: ^1.8.2
   # path_provider: ^2.0.11
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  test: ^1.21.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
