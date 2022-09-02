@@ -25,3 +25,5 @@ class JsonPrinter extends LogPrinter {
     ];
   }
 }
+
+final log = Logger(printer: JsonPrinter());
