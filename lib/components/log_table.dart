@@ -1,13 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
-import '../logging.dart';
-import '../util/reverse_line_reader.dart';
+import '../services/log_file_loader.dart';
 
 const double _defaultColumnWidth = 300;
 
@@ -93,14 +91,21 @@ class LogFileDataSource extends DataGridSource {
   /// Creates the employee data source class with required details.
   String filePath;
   late File file;
-  // Cacnel this when file changes.
-  StreamSubscription? fileWatchSubscription;
-  int lastReadPosBackwards = 0;
-  int lastReadPosForwards = 0;
+  LogFileLoader? _logFileLoader;
 
   LogFileDataSource({required this.filePath}) {
-    file = File(filePath);
     init();
+  }
+
+  Future init() async {
+    _logFileLoader =
+        await LogFileLoader.create(filePath, () => onFileChanged());
+    await readMore();
+  }
+
+  void onFileChanged() {
+    EasyDebounce.debounce('read-forward-debounce',
+        const Duration(milliseconds: 100), () => readMore(false));
   }
 
   final List<DataGridRow> _rows = [];
@@ -111,76 +116,20 @@ class LogFileDataSource extends DataGridSource {
   @override
   List<DataGridRow> get rows => _rows;
 
-  Future init() async {
-    var fileLen = await file.length();
-    lastReadPosBackwards = fileLen;
-    lastReadPosForwards = fileLen;
-    await readMore();
-
-    fileWatchSubscription =
-        file.watch(events: FileSystemEvent.modify).listen((e) {
-      log.d("File changed, loading more rows.");
-      EasyDebounce.debounce('read-forward-debounce',
-          const Duration(milliseconds: 100), () => readMore(false));
-    });
-  }
-
   Future readMore([bool backwards = true]) async {
-    Set<String> newCols = {};
+    if (_logFileLoader == null) return;
 
-    var start = Stopwatch();
-    start.start();
-
-    List<DataGridRow> rows = [];
-
-    const linesToRead = 100;
-    var linesRead = 0;
-
-    readLine(List<int> lineBytes) {
-      var line = const Utf8Decoder().convert(lineBytes);
-      if (line.isEmpty) return;
-
-      Map<String, dynamic> rowMap = jsonDecode(line);
-      for (var k in rowMap.keys) {
-        newCols.add(k);
-      }
-
-      var cells = rowMap.entries
-          .map((entry) =>
-              DataGridCell(columnName: entry.key, value: entry.value))
-          .toList();
-
-      rows.add(DataGridRow(cells: cells));
-
-      linesRead++;
-    }
+    var lines = await _logFileLoader!.readMore(100, backwards);
 
     if (backwards) {
-      var reader = await ReverseLineReader.create(file, lastReadPosBackwards);
-      while (reader.hasMoreLines() && linesRead < linesToRead) {
-        readLine(await reader.readLine());
-      }
-      lastReadPosBackwards = reader.position;
+      _rows.addAll(lines.rows);
     } else {
-      var fileSize = await file.length();
-      var stream = file.openRead(lastReadPosForwards, fileSize);
-      var bytes =
-          await stream.reduce((previous, element) => previous + element);
-      readLine(bytes);
-      lastReadPosForwards += bytes.length;
-    }
-
-    if (backwards) {
-      _rows.addAll(rows);
-    } else {
-      for (var row in rows) {
+      for (var row in lines.rows) {
         _rows.insert(0, row);
       }
     }
 
-    log.d("Added ${rows.length} rows in ${start.elapsed}.");
-
-    _columns.addAll(newCols.difference(_columns.toSet()));
+    _columns.addAll(lines.columns.difference(_columns.toSet()));
 
     notifyListeners();
   }
