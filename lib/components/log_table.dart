@@ -9,7 +9,9 @@ import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 import '../logging.dart';
 import '../util/reverse_line_reader.dart';
 
-class LogTable extends StatelessWidget {
+const double _defaultColumnWidth = 300;
+
+class LogTable extends StatefulWidget {
   const LogTable({
     Key? key,
     required this.dataSource,
@@ -18,10 +20,26 @@ class LogTable extends StatelessWidget {
   final LogFileDataSource dataSource;
 
   @override
+  State<LogTable> createState() => _LogTableState();
+}
+
+class _LogTableState extends State<LogTable> {
+  final Map<String, double> _columnWidthOverrides = {};
+
+  @override
   Widget build(BuildContext context) {
     return SfDataGrid(
-        source: dataSource,
-        columnWidthMode: ColumnWidthMode.fill,
+        rowHeight: 30,
+        headerRowHeight: 50,
+        source: widget.dataSource,
+        allowColumnsResizing: true,
+        columnResizeMode: ColumnResizeMode.onResizeEnd,
+        onColumnResizeUpdate: (ColumnResizeUpdateDetails details) {
+          setState(() {
+            _columnWidthOverrides[details.column.columnName] = details.width;
+          });
+          return true;
+        },
         loadMoreViewBuilder: ((context, loadMoreRows) {
           Future<String> loadRows() async {
             await loadMoreRows();
@@ -51,12 +69,13 @@ class LogTable extends StatelessWidget {
                 }
               });
         }),
-        columns: dataSource.columns
+        columns: widget.dataSource.columns
             .map(
               (c) => GridColumn(
-                  columnName: 'id',
+                  columnName: c,
+                  width: _columnWidthOverrides[c] ?? _defaultColumnWidth,
                   label: Container(
-                      padding: const EdgeInsets.all(8.0),
+                      padding: const EdgeInsets.all(4.0),
                       alignment: Alignment.center,
                       child: Text(c))),
             )
@@ -80,7 +99,13 @@ class LogFileDataSource extends DataGridSource {
     init();
   }
 
-  void setFilePath(String path) {}
+  final List<DataGridRow> _rows = [];
+  final List<String> _columns = [];
+
+  List<String> get columns => _columns;
+
+  @override
+  List<DataGridRow> get rows => _rows;
 
   Future init() async {
     var fileLen = await file.length();
@@ -162,14 +187,6 @@ class LogFileDataSource extends DataGridSource {
         const Duration(milliseconds: 100), () => readMore());
   }
 
-  final List<DataGridRow> _rows = [];
-  final List<String> _columns = [];
-
-  List<String> get columns => _columns;
-
-  @override
-  List<DataGridRow> get rows => _rows;
-
   @override
   DataGridRowAdapter buildRow(DataGridRow row) {
     var cells = row.getCells();
@@ -185,8 +202,9 @@ class LogFileDataSource extends DataGridSource {
       }
 
       return Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.all(2.0),
+          height: 30,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.all(4.0),
           child: Text(columnText));
     }).toList());
   }
