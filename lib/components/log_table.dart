@@ -75,6 +75,10 @@ class _LogTableState extends State<LogTable> {
                   columnName: c,
                   width: _columnWidthOverrides[c] ?? _defaultColumnWidth,
                   label: Container(
+                      decoration: BoxDecoration(
+                          border: Border(
+                              right: BorderSide(
+                                  color: Colors.grey.withOpacity(0.5)))),
                       padding: const EdgeInsets.all(4.0),
                       alignment: Alignment.center,
                       child: Text(c))),
@@ -203,6 +207,9 @@ class LogFileDataSource extends DataGridSource {
 
       return Container(
           height: 30,
+          decoration: BoxDecoration(
+              border: Border(
+                  right: BorderSide(color: Colors.grey.withOpacity(0.5)))),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.all(4.0),
           child: Text(columnText));
