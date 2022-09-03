@@ -85,21 +85,30 @@ class _LogTableState extends State<LogTable> {
   }
 }
 
-/// An object to set the employee collection data source to the datagrid. This
-/// is used to map the employee data to the datagrid widget.
 class LogFileDataSource extends DataGridSource {
-  /// Creates the employee data source class with required details.
-  String filePath;
   late File file;
   LogFileLoader? _logFileLoader;
 
-  LogFileDataSource({required this.filePath}) {
-    init();
+  late String _filePath;
+  String get filePath => _filePath;
+  set filePath(String path) {
+    _filePath = path;
+    initLoader();
   }
 
-  Future init() async {
+  LogFileDataSource({required String filePath}) {
+    this.filePath = filePath;
+  }
+
+  void clearCells() {
+    _rows.clear();
+    _columns.clear();
+  }
+
+  Future initLoader() async {
+    clearCells();
     _logFileLoader =
-        await LogFileLoader.create(filePath, () => onFileChanged());
+        await LogFileLoader.create(_filePath, () => onFileChanged());
     await readMore();
   }
 

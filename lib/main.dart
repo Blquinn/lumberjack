@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'components/log_table.dart';
@@ -30,6 +31,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // String filePath = "";
+
   late LogFileDataSource dataSource;
 
   @override
@@ -47,7 +50,29 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Lumberjack'),
       ),
-      body: LogTable(dataSource: dataSource),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(children: [
+              ElevatedButton(
+                  onPressed: () async {
+                    var fileResult = await FilePicker.platform.pickFiles();
+                    if (fileResult == null || fileResult.files.isEmpty) return;
+                    setState(() {
+                      dataSource.filePath = fileResult.files.first.path ?? "";
+                    });
+                  },
+                  child: const Text("Choose file")),
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Text(dataSource.filePath),
+              ),
+            ]),
+          ),
+          Expanded(child: LogTable(dataSource: dataSource)),
+        ],
+      ),
     );
   }
 }
