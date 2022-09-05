@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
@@ -13,9 +15,11 @@ class LogTable extends StatefulWidget {
   const LogTable({
     Key? key,
     required this.dataSource,
+    this.onRowSelected,
   }) : super(key: key);
 
   final LogFileDataSource dataSource;
+  final Function(DataGridRow?)? onRowSelected;
 
   @override
   State<LogTable> createState() => _LogTableState();
@@ -23,15 +27,23 @@ class LogTable extends StatefulWidget {
 
 class _LogTableState extends State<LogTable> {
   final Map<String, double> _columnWidthOverrides = {};
+  final DataGridController _dataGridController = DataGridController();
 
   @override
   Widget build(BuildContext context) {
     return SfDataGrid(
+        controller: _dataGridController,
         rowHeight: 30,
         headerRowHeight: 50,
         source: widget.dataSource,
         allowColumnsResizing: true,
         columnResizeMode: ColumnResizeMode.onResizeEnd,
+        selectionMode: SelectionMode.singleDeselect,
+        navigationMode: GridNavigationMode.row,
+        onSelectionChanged: (addedRows, removedRows) {
+          widget.onRowSelected
+              ?.call(addedRows.isEmpty ? null : addedRows.first);
+        },
         onColumnResizeUpdate: (ColumnResizeUpdateDetails details) {
           setState(() {
             _columnWidthOverrides[details.column.columnName] = details.width;
@@ -96,7 +108,9 @@ class LogFileDataSource extends DataGridSource {
     initLoader();
   }
 
-  LogFileDataSource({required String filePath}) {
+  LogFileDataSource({
+    required String filePath,
+  }) {
     this.filePath = filePath;
   }
 
@@ -158,7 +172,11 @@ class LogFileDataSource extends DataGridSource {
       String columnText = "";
       for (var cell in cells) {
         if (cell.columnName == col) {
-          columnText = cell.value.toString();
+          if (cell.value is Map || cell.value is List) {
+            columnText = jsonEncode(cell.value);
+          } else {
+            columnText = cell.value.toString();
+          }
           break;
         }
       }
@@ -170,7 +188,8 @@ class LogFileDataSource extends DataGridSource {
                   right: BorderSide(color: Colors.grey.withOpacity(0.5)))),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.all(4.0),
-          child: Text(columnText));
+          child: Text(columnText,
+              style: const TextStyle(overflow: TextOverflow.ellipsis)));
     }).toList());
   }
 }

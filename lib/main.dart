@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -26,14 +28,12 @@ class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
 
   @override
-  // ignore: library_private_types_in_public_api
   _HomePageState createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  // String filePath = "";
-
   late LogFileDataSource dataSource;
+  String? activeRowJson;
 
   @override
   void initState() {
@@ -47,9 +47,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lumberjack'),
-      ),
       body: Column(
         children: [
           Padding(
@@ -61,6 +58,7 @@ class _HomePageState extends State<HomePage> {
                     if (fileResult == null || fileResult.files.isEmpty) return;
                     setState(() {
                       dataSource.filePath = fileResult.files.first.path ?? "";
+                      activeRowJson = null;
                     });
                   },
                   child: const Text("Choose file")),
@@ -70,7 +68,70 @@ class _HomePageState extends State<HomePage> {
               ),
             ]),
           ),
-          Expanded(child: LogTable(dataSource: dataSource)),
+          Expanded(
+              child: Row(
+            children: [
+              Expanded(
+                  child: LogTable(
+                      dataSource: dataSource,
+                      onRowSelected: (row) {
+                        String? json;
+                        if (row == null) {
+                          json = null;
+                        } else {
+                          Map<String, dynamic> rowObj = {};
+                          for (var cell in row.getCells()) {
+                            rowObj[cell.columnName] = cell.value;
+                          }
+
+                          json = const JsonEncoder.withIndent("  ")
+                              .convert(rowObj);
+                        }
+                        setState(() {
+                          activeRowJson = json;
+                        });
+                      })),
+              Container(
+                width: activeRowJson == null ? 0 : 500,
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.grey.withOpacity(0.6),
+                          offset: const Offset(0, 10),
+                          blurRadius: 5.0,
+                          spreadRadius: 0)
+                    ],
+                    shape: BoxShape.rectangle,
+                    color: Theme.of(context).cardColor),
+                child: Column(
+                  children: [
+                    Container(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          shape: const CircleBorder(),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            activeRowJson = null;
+                          });
+                        },
+                        child: const Icon(Icons.close),
+                      ),
+                    ),
+                    SingleChildScrollView(
+                        child: SelectionArea(
+                            child: Text(
+                      activeRowJson ?? "",
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ))),
+                  ],
+                ),
+              )
+            ],
+          )),
         ],
       ),
     );
