@@ -109,16 +109,21 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Container(
                       alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          shape: const CircleBorder(),
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                              shape: const CircleBorder(),
+                              padding: EdgeInsets.zero,
+                              fixedSize: const Size(28, 28)),
+                          onPressed: () {
+                            setState(() {
+                              activeRowJson = null;
+                            });
+                          },
+                          child: const Icon(Icons.close),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            activeRowJson = null;
-                          });
-                        },
-                        child: const Icon(Icons.close),
                       ),
                     ),
                     SingleChildScrollView(
