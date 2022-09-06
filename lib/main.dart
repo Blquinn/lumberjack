@@ -34,6 +34,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late LogFileDataSource dataSource;
   String? activeRowJson;
+  TextEditingController filterController = TextEditingController();
 
   @override
   void initState() {
@@ -42,6 +43,10 @@ class _HomePageState extends State<HomePage> {
     dataSource.addListener(() {
       setState(() {});
     });
+  }
+
+  void applyFilter() {
+    dataSource.filter = filterController.text;
   }
 
   @override
@@ -67,6 +72,32 @@ class _HomePageState extends State<HomePage> {
                 child: Text(dataSource.filePath),
               ),
             ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: filterController,
+                    decoration:
+                        const InputDecoration(hintText: "Filter logs..."),
+                    onEditingComplete: applyFilter,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                TextButton.icon(
+                    onPressed: () {
+                      filterController.clear();
+                      applyFilter();
+                    },
+                    icon: const Icon(Icons.close),
+                    label: const Text("Clear")),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                    onPressed: applyFilter, child: const Text("Filter"))
+              ],
+            ),
           ),
           Expanded(
               child: Row(

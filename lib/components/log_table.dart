@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
@@ -108,6 +107,26 @@ class LogFileDataSource extends DataGridSource {
     initLoader();
   }
 
+  final List<DataGridRow> _sourceRows = [];
+  List<DataGridRow> _effectiveRows = [];
+  final List<String> _columns = [];
+
+  String _filter = "";
+  String get filter => _filter;
+  set filter(String newFilter) {
+    if (_filter == newFilter) {
+      return;
+    }
+
+    _filter = newFilter;
+    applyRows();
+  }
+
+  List<String> get columns => _columns;
+
+  @override
+  List<DataGridRow> get rows => _effectiveRows;
+
   LogFileDataSource({
     required String filePath,
   }) {
@@ -115,7 +134,7 @@ class LogFileDataSource extends DataGridSource {
   }
 
   void clearCells() {
-    _rows.clear();
+    _sourceRows.clear();
     _columns.clear();
   }
 
@@ -131,13 +150,28 @@ class LogFileDataSource extends DataGridSource {
         const Duration(milliseconds: 100), () => readMore(false));
   }
 
-  final List<DataGridRow> _rows = [];
-  final List<String> _columns = [];
+  void applyRows() {
+    if (filter.isEmpty) {
+      _effectiveRows = List.from(_sourceRows);
+      notifyListeners();
+      return;
+    }
 
-  List<String> get columns => _columns;
+    _effectiveRows = [];
+    var lowerFilter = filter.toLowerCase();
 
-  @override
-  List<DataGridRow> get rows => _rows;
+    for (var row in _sourceRows) {
+      for (var cell in row.getCells()) {
+        var value = cell.value;
+        if (value is String && value.toLowerCase().contains(lowerFilter)) {
+          _effectiveRows.add(row);
+          break;
+        }
+      }
+    }
+
+    notifyListeners();
+  }
 
   Future readMore([bool backwards = true]) async {
     if (_logFileLoader == null) return;
@@ -145,16 +179,16 @@ class LogFileDataSource extends DataGridSource {
     var lines = await _logFileLoader!.readMore(100, backwards);
 
     if (backwards) {
-      _rows.addAll(lines.rows);
+      _sourceRows.addAll(lines.rows);
     } else {
       for (var row in lines.rows) {
-        _rows.insert(0, row);
+        _sourceRows.insert(0, row);
       }
     }
 
     _columns.addAll(lines.columns.difference(_columns.toSet()));
 
-    notifyListeners();
+    applyRows();
   }
 
   @override
