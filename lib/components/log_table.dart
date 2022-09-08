@@ -63,12 +63,12 @@ class _LogTableState extends State<LogTable> {
                   return Container(
                       height: 60.0,
                       width: double.infinity,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                           color: Colors.white,
                           border: BorderDirectional(
                               top: BorderSide(
                                   width: 1.0,
-                                  color: Color.fromRGBO(0, 0, 0, 0.26)))),
+                                  color: Colors.grey.withOpacity(0.5)))),
                       alignment: Alignment.center,
                       child: const CircularProgressIndicator(
                           valueColor:
@@ -176,7 +176,8 @@ class LogFileDataSource extends DataGridSource {
   Future readMore([bool backwards = true]) async {
     if (_logFileLoader == null) return;
 
-    var lines = await _logFileLoader!.readMore(100, backwards);
+    const linesToLoad = 1000;
+    var lines = await _logFileLoader!.readMore(linesToLoad, backwards);
 
     if (backwards) {
       _sourceRows.addAll(lines.rows);
