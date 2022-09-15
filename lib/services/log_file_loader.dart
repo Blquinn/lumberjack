@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
+import '../grok/grok.dart';
 import '../logging.dart';
 import '../util/reverse_line_reader.dart';
+
+// TODO: This should probably return maps, not DataGridRow's
+// TODO: Error handling.
 
 class LinesResult {
   final Set<String> columns;
@@ -14,22 +17,30 @@ class LinesResult {
   LinesResult(this.columns, this.rows);
 }
 
+enum Mode {
+  json,
+  plain,
+}
+
 class LogFileLoader {
+  final Mode mode;
   final String filePath;
   late File _file;
   final Function onNewLinesAvailable;
+  final Grok? grok;
 
   StreamSubscription? _fileWatchSubscription;
   int _lastReadPosBackwards = 0;
   int _lastReadPosForwards = 0;
 
-  LogFileLoader._(this.filePath, this.onNewLinesAvailable) {
+  LogFileLoader._(
+      this.filePath, this.onNewLinesAvailable, this.mode, this.grok) {
     _file = File(filePath);
   }
 
-  static Future<LogFileLoader> create(
-      String filePath, Function onNewLinesAvailable) async {
-    var loader = LogFileLoader._(filePath, onNewLinesAvailable);
+  static Future<LogFileLoader> create(String filePath,
+      Function onNewLinesAvailable, Mode mode, Grok? grok) async {
+    var loader = LogFileLoader._(filePath, onNewLinesAvailable, mode, grok);
     await loader.init();
     return loader;
   }
@@ -57,10 +68,31 @@ class LogFileLoader {
     var linesRead = 0;
 
     readLine(List<int> lineBytes) {
-      var line = const Utf8Decoder().convert(lineBytes);
+      // TODO: Error handling.
+      var line = utf8.decode(lineBytes);
       if (line.isEmpty) return;
 
-      Map<String, dynamic> rowMap = jsonDecode(line);
+      Map<String, dynamic> rowMap;
+
+      switch (mode) {
+        case Mode.json:
+          rowMap = jsonDecode(line);
+          break;
+        case Mode.plain: // Parse grok
+          rowMap = {"message": line};
+          break;
+      }
+
+      // Preprocess rows
+      var message = rowMap["message"];
+      if (grok != null && message != null && message is String) {
+        // TODO: Error handling.
+        var newEntries = grok!.capture(message);
+        for (var e in newEntries.entries) {
+          rowMap[e.key] = e.value;
+        }
+      }
+
       for (var k in rowMap.keys) {
         newCols.add(k);
       }

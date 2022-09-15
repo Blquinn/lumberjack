@@ -4,9 +4,14 @@ import 'dart:io';
 
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
+import 'package:lumberjack/grok/compiler.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
+import '../grok/grok.dart';
+import '../logging.dart';
 import '../services/log_file_loader.dart';
+
+// TODO: message column can fill the screen if it is the only column.
 
 const double _defaultColumnWidth = 300;
 
@@ -99,6 +104,10 @@ class _LogTableState extends State<LogTable> {
 class LogFileDataSource extends DataGridSource {
   late File file;
   LogFileLoader? _logFileLoader;
+  GrokCompiler? _grokCompiler;
+  String? _grokPattern;
+  Mode _mode = Mode.plain;
+  Mode get mode => _mode;
 
   late String _filePath;
   String get filePath => _filePath;
@@ -140,9 +149,32 @@ class LogFileDataSource extends DataGridSource {
 
   Future initLoader() async {
     clearCells();
-    _logFileLoader =
-        await LogFileLoader.create(_filePath, () => onFileChanged());
+
+    Grok? grok;
+    if (_grokPattern != null && _grokPattern!.isNotEmpty) {
+      try {
+        _grokCompiler ??= await defaultCompiler();
+        grok = _grokCompiler!.compile(_grokPattern!);
+      } catch (err) {
+        // TODO: Propogate this error to the user.
+        log.w("Failed to compile grok pattern: $err");
+      }
+    }
+
+    _logFileLoader = await LogFileLoader.create(
+        _filePath, () => onFileChanged(), _mode, grok);
+
     await readMore();
+  }
+
+  Future setGrokPattern(String pattern) async {
+    _grokPattern = pattern.isEmpty ? null : pattern;
+    await initLoader();
+  }
+
+  Future setMode(Mode mode) async {
+    _mode = mode;
+    await initLoader();
   }
 
   void onFileChanged() {

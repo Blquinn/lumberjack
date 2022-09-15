@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:lumberjack/services/log_file_loader.dart';
 
 import 'components/log_table.dart';
 import 'logging.dart';
@@ -32,21 +33,26 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late LogFileDataSource dataSource;
-  String? activeRowJson;
-  TextEditingController filterController = TextEditingController();
+  late LogFileDataSource _dataSource;
+  String? _activeRowJson;
+  final TextEditingController _filterController = TextEditingController();
+  final TextEditingController _grokPatternController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    dataSource = LogFileDataSource(filePath: "/tmp/short-log.jsonl");
-    dataSource.addListener(() {
+    _dataSource = LogFileDataSource(filePath: "/tmp/journalctl-log");
+    _dataSource.addListener(() {
       setState(() {});
     });
   }
 
   void applyFilter() {
-    dataSource.filter = filterController.text;
+    _dataSource.filter = _filterController.text;
+  }
+
+  Future applyGrokPattern() async {
+    await _dataSource.setGrokPattern(_grokPatternController.text);
   }
 
   @override
@@ -55,6 +61,8 @@ class _HomePageState extends State<HomePage> {
       body: Column(
         children: [
           buildFilePicker(),
+          buildFileTypePicker(),
+          buildGrokEditor(),
           buildFilterControls(),
           buildResultsInfoPanel(),
           Expanded(
@@ -64,6 +72,69 @@ class _HomePageState extends State<HomePage> {
               buildDetailsPanel(context)
             ],
           )),
+        ],
+      ),
+    );
+  }
+
+  Row buildFileTypePicker() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        const Text('File type:'),
+        SizedBox(
+          width: 150,
+          child: ListTile(
+            title: const Text('Plain'),
+            dense: true,
+            leading: Radio<Mode>(
+              value: Mode.plain,
+              groupValue: _dataSource.mode,
+              onChanged: (Mode? value) {
+                setState(() {
+                  _dataSource.setMode(Mode.plain);
+                });
+              },
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 150,
+          child: ListTile(
+            title: const Text('Json'),
+            dense: true,
+            leading: Radio<Mode>(
+              value: Mode.json,
+              groupValue: _dataSource.mode,
+              onChanged: (Mode? value) {
+                setState(() {
+                  _dataSource.setMode(Mode.json);
+                });
+              },
+            ),
+          ),
+        ),
+        // const SizedBox.expand(),
+      ],
+    );
+  }
+
+  Widget buildGrokEditor() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _grokPatternController,
+              decoration:
+                  const InputDecoration(hintText: "Use GROK pattern..."),
+              onEditingComplete: applyGrokPattern,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+              onPressed: applyGrokPattern, child: const Text("Apply"))
         ],
       ),
     );
@@ -80,7 +151,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Container(
             padding: EdgeInsets.all(8.0),
-            child: Text('${dataSource.effectiveRows.length} results found'),
+            child: Text('${_dataSource.effectiveRows.length} results found'),
           )
         ],
       ),
@@ -96,14 +167,14 @@ class _HomePageState extends State<HomePage> {
               var fileResult = await FilePicker.platform.pickFiles();
               if (fileResult == null || fileResult.files.isEmpty) return;
               setState(() {
-                dataSource.filePath = fileResult.files.first.path ?? "";
-                activeRowJson = null;
+                _dataSource.filePath = fileResult.files.first.path ?? "";
+                _activeRowJson = null;
               });
             },
             child: const Text("Choose file")),
         Padding(
           padding: const EdgeInsets.only(left: 8.0),
-          child: Text(dataSource.filePath),
+          child: Text(_dataSource.filePath),
         ),
       ]),
     );
@@ -116,20 +187,20 @@ class _HomePageState extends State<HomePage> {
         children: [
           Expanded(
             child: TextField(
-              controller: filterController,
+              controller: _filterController,
               decoration: const InputDecoration(hintText: "Filter logs..."),
               onEditingComplete: applyFilter,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           TextButton.icon(
               onPressed: () {
-                filterController.clear();
+                _filterController.clear();
                 applyFilter();
               },
               icon: const Icon(Icons.close),
               label: const Text("Clear")),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           ElevatedButton(onPressed: applyFilter, child: const Text("Filter"))
         ],
       ),
@@ -138,7 +209,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget buildDetailsPanel(BuildContext context) {
     return Container(
-      width: activeRowJson == null ? 0 : 500,
+      width: _activeRowJson == null ? 0 : 500,
       alignment: Alignment.topLeft,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(boxShadow: [
@@ -162,7 +233,7 @@ class _HomePageState extends State<HomePage> {
                     fixedSize: const Size(28, 28)),
                 onPressed: () {
                   setState(() {
-                    activeRowJson = null;
+                    _activeRowJson = null;
                   });
                 },
                 child: const Icon(Icons.close),
@@ -172,7 +243,7 @@ class _HomePageState extends State<HomePage> {
           SingleChildScrollView(
               child: SelectionArea(
                   child: Text(
-            activeRowJson ?? "",
+            _activeRowJson ?? "",
             style: const TextStyle(fontFamily: 'monospace'),
           ))),
         ],
@@ -182,7 +253,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget buildLogTable() {
     return LogTable(
-        dataSource: dataSource,
+        dataSource: _dataSource,
         onRowSelected: (row) {
           String? json;
           if (row == null) {
@@ -196,7 +267,7 @@ class _HomePageState extends State<HomePage> {
             json = const JsonEncoder.withIndent("  ").convert(rowObj);
           }
           setState(() {
-            activeRowJson = json;
+            _activeRowJson = json;
           });
         });
   }
