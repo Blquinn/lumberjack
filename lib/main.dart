@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +21,9 @@ class LumberjackApp extends StatelessWidget {
     return MaterialApp(
       title: 'Lumberjack',
       theme: ThemeData(primarySwatch: Colors.deepPurple),
+      darkTheme:
+          ThemeData(primarySwatch: Colors.blue, brightness: Brightness.dark),
+      themeMode: ThemeMode.system,
       home: const HomePage(),
     );
   }
@@ -66,12 +70,13 @@ class _HomePageState extends State<HomePage> {
           buildFilterControls(),
           buildResultsInfoPanel(),
           Expanded(
-              child: Row(
-            children: [
-              Expanded(child: buildLogTable()),
-              buildDetailsPanel(context)
-            ],
-          )),
+            child: Row(
+              children: [
+                Expanded(child: buildLogTable()),
+                buildDetailsPanel(context)
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -129,6 +134,7 @@ class _HomePageState extends State<HomePage> {
               controller: _grokPatternController,
               decoration:
                   const InputDecoration(hintText: "Use GROK pattern..."),
+              style: const TextStyle(fontFamily: 'monospace'),
               onEditingComplete: applyGrokPattern,
             ),
           ),
@@ -144,9 +150,13 @@ class _HomePageState extends State<HomePage> {
   Widget buildResultsInfoPanel() {
     return Container(
       decoration: BoxDecoration(
-          border: Border(
-        bottom: BorderSide(width: 1.0, color: Colors.grey.withOpacity(0.5)),
-      )),
+        border: Border(
+          bottom: BorderSide(
+            width: 1.0,
+            color: Colors.grey.withOpacity(0.5),
+          ),
+        ),
+      ),
       child: Row(
         children: [
           Container(
@@ -208,17 +218,28 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildDetailsPanel(BuildContext context) {
-    return Container(
-      width: _activeRowJson == null ? 0 : 500,
-      alignment: Alignment.topLeft,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(boxShadow: [
+    var theme = Theme.of(context);
+
+    BoxDecoration? decoration;
+
+    if (theme.brightness == Brightness.light) {
+      decoration = BoxDecoration(boxShadow: [
         BoxShadow(
             color: Colors.grey.withOpacity(0.6),
             offset: const Offset(0, 10),
             blurRadius: 5.0,
-            spreadRadius: 0)
-      ], shape: BoxShape.rectangle, color: Theme.of(context).cardColor),
+            spreadRadius: 0),
+      ], shape: BoxShape.rectangle, color: Theme.of(context).cardColor);
+    } else {
+      decoration = BoxDecoration(
+          shape: BoxShape.rectangle, color: Theme.of(context).backgroundColor);
+    }
+
+    return Container(
+      width: _activeRowJson == null ? 0 : 500,
+      alignment: Alignment.topLeft,
+      padding: const EdgeInsets.all(10),
+      decoration: decoration,
       child: Column(
         children: [
           Container(
@@ -228,9 +249,10 @@ class _HomePageState extends State<HomePage> {
               height: 28,
               child: TextButton(
                 style: TextButton.styleFrom(
-                    shape: const CircleBorder(),
-                    padding: EdgeInsets.zero,
-                    fixedSize: const Size(28, 28)),
+                  shape: const CircleBorder(),
+                  padding: EdgeInsets.zero,
+                  fixedSize: const Size(28, 28),
+                ),
                 onPressed: () {
                   setState(() {
                     _activeRowJson = null;
@@ -241,11 +263,13 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           SingleChildScrollView(
-              child: SelectionArea(
-                  child: Text(
-            _activeRowJson ?? "",
-            style: const TextStyle(fontFamily: 'monospace'),
-          ))),
+            child: SelectionArea(
+              child: Text(
+                _activeRowJson ?? "",
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ),
+          ),
         ],
       ),
     );

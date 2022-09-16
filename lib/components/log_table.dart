@@ -13,7 +13,7 @@ import '../services/log_file_loader.dart';
 
 // TODO: message column can fill the screen if it is the only column.
 
-const double _defaultColumnWidth = 300;
+const double _defaultColumnWidth = 150;
 
 class LogTable extends StatefulWidget {
   const LogTable({
@@ -30,7 +30,9 @@ class LogTable extends StatefulWidget {
 }
 
 class _LogTableState extends State<LogTable> {
-  final Map<String, double> _columnWidthOverrides = {};
+  final Map<String, double> _columnWidthOverrides = {
+    "message": _defaultColumnWidth * 6
+  };
   final DataGridController _dataGridController = DataGridController();
 
   @override
@@ -164,7 +166,11 @@ class LogFileDataSource extends DataGridSource {
     _logFileLoader = await LogFileLoader.create(
         _filePath, () => onFileChanged(), _mode, grok);
 
-    await readMore();
+    try {
+      await readMore();
+    } catch (err) {
+      log.w("Failed to read line from file: $err");
+    }
   }
 
   Future setGrokPattern(String pattern) async {
@@ -183,6 +189,8 @@ class LogFileDataSource extends DataGridSource {
   }
 
   void applyRows() {
+    sortColumns();
+
     if (filter.isEmpty) {
       _effectiveRows = List.from(_sourceRows);
       notifyListeners();
@@ -224,6 +232,14 @@ class LogFileDataSource extends DataGridSource {
     applyRows();
   }
 
+  void sortColumns() {
+    _columns.sort((a, b) {
+      if (a == "message") return 1;
+      if (a == "timestamp") return -1;
+      return a.compareTo(b);
+    });
+  }
+
   @override
   Future<void> handleLoadMoreRows() async {
     EasyDebounce.debounce('read-backward-debounce',
@@ -249,14 +265,17 @@ class LogFileDataSource extends DataGridSource {
       }
 
       return Container(
-          height: 30,
-          decoration: BoxDecoration(
-              border: Border(
-                  right: BorderSide(color: Colors.grey.withOpacity(0.5)))),
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.all(4.0),
-          child: Text(columnText,
-              style: const TextStyle(overflow: TextOverflow.ellipsis)));
+        height: 30,
+        decoration: BoxDecoration(
+            border:
+                Border(right: BorderSide(color: Colors.grey.withOpacity(0.5)))),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.all(4.0),
+        child: Text(
+          columnText,
+          style: const TextStyle(overflow: TextOverflow.ellipsis),
+        ),
+      );
     }).toList());
   }
 }
