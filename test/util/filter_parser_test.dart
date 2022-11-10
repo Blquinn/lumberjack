@@ -108,6 +108,15 @@ void main() {
       expect((res.value as Binary).right, isA<Binary>());
     });
 
+    test('can parse an in query', () {
+      final res = parser.parse(r"'f' in 'foo'");
+      expect(res.isSuccess, isTrue);
+      expect(res.value, isA<Binary>());
+      expect((res.value as Binary).left, isA<Value>());
+      expect((res.value as Binary).name, equals('in'));
+      expect((res.value as Binary).right, isA<Value>());
+    });
+
     test('can parse a group', () {
       final res = parser.parse(r"(.foo == 'bar')");
       expect(res.isSuccess, isTrue);
@@ -221,6 +230,27 @@ void main() {
       expect(result2.isSuccess, isTrue);
       final match2 = result2.value.eval(Evaluator(doc));
       expect(match2, isFalse);
+    });
+
+    test('in expression filters', () {
+      var filter = parser.parse('"b" in .foo');
+      expect(filter.isSuccess, isTrue);
+      var doc = {"foo": "bar", "bin": 4};
+      var match = filter.value.eval(Evaluator(doc));
+      expect(match, isTrue);
+
+      filter = parser.parse('.foo in "foobar"');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isTrue);
+
+      // Non strings return false
+      filter = parser.parse('2 in 2');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isFalse);
     });
 
     test('or expression filters', () {

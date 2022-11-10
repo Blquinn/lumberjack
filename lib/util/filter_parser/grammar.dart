@@ -40,6 +40,14 @@ final Parser<Expression> parser = () {
     ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
     ..left(string('<=').trim(), compareExpr((alg) => alg.le))
     ..left(string('>=').trim(), compareExpr((alg) => alg.ge))
+    ..left(
+        string('in').trim(),
+        compareExpr((alg) => (l, r) {
+              if ((l is! String) || (r is! String)) {
+                return false;
+              }
+              return r.contains(l);
+            }))
     ..left(char('<').trim(), compareExpr((alg) => alg.lt))
     ..left(char('>').trim(), compareExpr((alg) => alg.gt))
     ..left(char('=').trim(), compareExpr((alg) => alg.eq));
