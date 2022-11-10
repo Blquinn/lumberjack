@@ -42,6 +42,9 @@ dependencies:
   path: ^1.8.2
   file_picker: ^5.0.1
   path_provider: ^2.0.11
+  petitparser: ^5.1.0
+  # query: ^2.1.0
+  json_path: ^0.4.2
 
 dev_dependencies:
   flutter_test:

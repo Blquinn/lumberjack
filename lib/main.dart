@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:lumberjack/services/log_file_loader.dart';
+import 'package:lumberjack/services/log_filter.dart';
 
 import 'components/log_table.dart';
+import 'util/filter_parser/grammar.dart';
 import 'logging.dart';
 
 void main() {
@@ -39,20 +40,36 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late LogFileDataSource _dataSource;
   String? _activeRowJson;
+  bool _filterQueryLangEnabled = false;
   final TextEditingController _filterController = TextEditingController();
   final TextEditingController _grokPatternController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _dataSource = LogFileDataSource(filePath: "/tmp/journalctl-log");
+    _dataSource = LogFileDataSource(filePath: "/tmp/foo.jsonl");
     _dataSource.addListener(() {
       setState(() {});
     });
   }
 
   void applyFilter() {
-    _dataSource.filter = _filterController.text;
+    if (_filterController.text.isEmpty) {
+      _dataSource.filter = null;
+      return;
+    }
+
+    if (_filterQueryLangEnabled) {
+      final result = parser.parse(_filterController.text);
+      if (result.isFailure) {
+        // TODO: Show error msg
+        _dataSource.filter = null;
+        return;
+      }
+      _dataSource.filter = ExpressionFilter(result.value);
+    } else {
+      _dataSource.filter = TextFilter(_filterController.text);
+    }
   }
 
   Future applyGrokPattern() async {
@@ -67,7 +84,7 @@ class _HomePageState extends State<HomePage> {
           buildFilePicker(),
           buildFileTypePicker(),
           buildGrokEditor(),
-          buildFilterControls(),
+          buildFilterControls(context),
           buildResultsInfoPanel(),
           Expanded(
             child: Row(
@@ -190,7 +207,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget buildFilterControls() {
+  Widget buildFilterControls(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Row(
@@ -199,7 +218,25 @@ class _HomePageState extends State<HomePage> {
             child: TextField(
               controller: _filterController,
               decoration: const InputDecoration(hintText: "Filter logs..."),
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontFamily: 'Roboto Mono',
+                fontFamilyFallback: ['monospace'],
+              ),
               onEditingComplete: applyFilter,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: """Enable advanced filter query language.
+If disabled, the filter will check if the log line contains the provided text.""",
+            child: Switch(
+              value: _filterQueryLangEnabled,
+              onChanged: (val) {
+                setState(() {
+                  _filterQueryLangEnabled = val;
+                  applyFilter();
+                });
+              },
             ),
           ),
           const SizedBox(width: 8),
@@ -266,7 +303,10 @@ class _HomePageState extends State<HomePage> {
             child: SelectionArea(
               child: Text(
                 _activeRowJson ?? "",
-                style: const TextStyle(fontFamily: 'monospace'),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontFamily: 'Roboto Mono',
+                  fontFamilyFallback: ['monospace'],
+                ),
               ),
             ),
           ),
