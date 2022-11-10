@@ -45,7 +45,9 @@ final Parser<Expression> parser = () {
     ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
     ..left(string('<=').trim(), compareExpr((alg) => alg.le))
     ..left(string('>=').trim(), compareExpr((alg) => alg.ge))
-    ..left(string('in').trim(), compareExpr((alg) => isStringIn))
+    ..left(stringIgnoreCase('in').trim(), compareExpr((alg) => isStringIn))
+    ..left(stringIgnoreCase('contains').trim(),
+        compareExpr((alg) => doesStringContain))
     ..left(string('=~').trim(), compareExpr((alg) => doesRegexMatch))
     ..left(char('<').trim(), compareExpr((alg) => alg.lt))
     ..left(char('>').trim(), compareExpr((alg) => alg.gt))

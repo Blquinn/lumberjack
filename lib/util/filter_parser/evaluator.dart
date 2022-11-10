@@ -81,6 +81,14 @@ class Evaluator {
   }
 }
 
+bool doesStringContain(l, r) {
+  if (!(l is String && r is String)) {
+    return false;
+  }
+
+  return l.contains(r);
+}
+
 bool isStringIn(l, r) {
   if (!(l is String && r is String)) {
     return false;

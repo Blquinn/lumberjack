@@ -5,11 +5,14 @@ import 'dart:io';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:lumberjack/grok/compiler.dart';
+import 'package:lumberjack/services/log_filter.dart';
+import 'package:lumberjack/util/filter_parser/evaluator.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 
 import '../grok/grok.dart';
 import '../logging.dart';
 import '../services/log_file_loader.dart';
+import '../util/filter_parser/ast.dart';
 
 // TODO: message column can fill the screen if it is the only column.
 
@@ -109,10 +112,13 @@ class LogFileDataSource extends DataGridSource {
   GrokCompiler? _grokCompiler;
   String? _grokPattern;
   Mode _mode = Mode.plain;
+
   Mode get mode => _mode;
 
   late String _filePath;
+
   String get filePath => _filePath;
+
   set filePath(String path) {
     _filePath = path;
     initLoader();
@@ -122,9 +128,11 @@ class LogFileDataSource extends DataGridSource {
   List<DataGridRow> _effectiveRows = [];
   final List<String> _columns = [];
 
-  String _filter = "";
-  String get filter => _filter;
-  set filter(String newFilter) {
+  LogFilter? _filter;
+
+  LogFilter? get filter => _filter;
+
+  set filter(LogFilter? newFilter) {
     if (_filter == newFilter) {
       return;
     }
@@ -191,22 +199,17 @@ class LogFileDataSource extends DataGridSource {
   void applyRows() {
     sortColumns();
 
-    if (filter.isEmpty) {
+    if (filter == null) {
       _effectiveRows = List.from(_sourceRows);
       notifyListeners();
       return;
     }
 
     _effectiveRows = [];
-    var lowerFilter = filter.toLowerCase();
 
     for (var row in _sourceRows) {
-      for (var cell in row.getCells()) {
-        var value = cell.value;
-        if (value is String && value.toLowerCase().contains(lowerFilter)) {
-          _effectiveRows.add(row);
-          break;
-        }
+      if (_filter!.match(row.toMap())) {
+        _effectiveRows.add(row);
       }
     }
 
@@ -277,5 +280,15 @@ class LogFileDataSource extends DataGridSource {
         ),
       );
     }).toList());
+  }
+}
+
+extension RowExt on DataGridRow {
+  Map<String, dynamic> toMap() {
+    Map<String, dynamic> map = {};
+    for (final cell in getCells()) {
+      map[cell.columnName] = cell.value;
+    }
+    return map;
   }
 }
