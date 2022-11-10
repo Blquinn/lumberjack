@@ -77,6 +77,19 @@ void main() {
       expect(res3.value, isA<Selector>());
     });
 
+    test('can parse regex', () {
+      var res = parser.parse(r'r".+"');
+      expect(res.isSuccess, isTrue);
+      expect(res.value, isA<Value>());
+      expect((res.value as Value).value, isA<RegExp>());
+
+      res = parser.parse(r'"foo" =~ r".+"');
+      expect(res.isSuccess, isTrue);
+      expect(res.value, isA<Binary>());
+      expect((res.value as Binary).left, isA<Value>());
+      expect((res.value as Binary).right, isA<Value>());
+    });
+
     test('can parse a comparison', () {
       final res = parser.parse(r".foo   ==     'bar'");
       expect(res.isSuccess, isTrue);
@@ -247,6 +260,39 @@ void main() {
 
       // Non strings return false
       filter = parser.parse('2 in 2');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isFalse);
+    });
+
+    test('regex expression filters', () {
+      var filter = parser.parse('"foo" =~ r".+"');
+      expect(filter.isSuccess, isTrue);
+      var doc = {};
+      var match = filter.value.eval(Evaluator(doc));
+      expect(match, isTrue);
+
+      filter = parser.parse('"foo" =~ r"bar"');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isFalse);
+
+      filter = parser.parse('.foo =~ r"b.+"');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isTrue);
+
+      filter = parser.parse('.foo =~ r"j.+"');
+      expect(filter.isSuccess, isTrue);
+      doc = {"foo": "bar", "bin": 4};
+      match = filter.value.eval(Evaluator(doc));
+      expect(match, isFalse);
+
+      // Non strings return false
+      filter = parser.parse('2 =~ r"j.+"');
       expect(filter.isSuccess, isTrue);
       doc = {"foo": "bar", "bin": 4};
       match = filter.value.eval(Evaluator(doc));

@@ -80,3 +80,34 @@ class Evaluator {
     return operator(leftVal, rightVal);
   }
 }
+
+bool isStringIn(l, r) {
+  if (!(l is String && r is String)) {
+    return false;
+  }
+
+  return r.contains(l);
+}
+
+bool doesRegexMatch(l, r) {
+  if (!(l is RegExp || r is RegExp)) {
+    return false;
+  }
+
+  if (!(l is String || r is String)) {
+    return false;
+  }
+
+  RegExp re;
+  String str;
+
+  if (l is RegExp) {
+    re = l;
+    str = r;
+  } else {
+    str = l;
+    re = r;
+  }
+
+  return re.hasMatch(str);
+}

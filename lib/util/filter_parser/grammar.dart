@@ -1,4 +1,5 @@
 import 'package:json_path/json_path.dart';
+import 'package:lumberjack/util/filter_parser/evaluator.dart';
 import 'package:petitparser/petitparser.dart';
 import 'package:json_path/src/grammar/strings.dart';
 import 'package:json_path/src/grammar/selector.dart';
@@ -14,6 +15,9 @@ import 'ast.dart';
 Parser<Sequence> jsonPath() => (char(r'$').optional() & selector.star())
     .map((value) => Sequence(value[1].cast<sel.Selector>()));
 
+Parser<RegExp> regex() =>
+    (char(r'r') & quotedString).map((value) => RegExp(value.last));
+
 final Parser<Expression> parser = () {
   final builder = ExpressionBuilder<Expression>();
   // Primitive values
@@ -23,6 +27,7 @@ final Parser<Expression> parser = () {
     ..primitive(stringIgnoreCase('true').trim().map((value) => Value(true)))
     ..primitive(number.trim().map((value) => Value(value)))
     ..primitive(quotedString.trim().map((value) => Value(value)))
+    ..primitive(ref0(regex).trim().map((value) => Value(value)))
     ..primitive(ref0(jsonPath).trim().map((value) => Selector(value)))
     ..wrapper(
         char('(').trim(), char(')').trim(), (left, value, right) => value);
@@ -40,14 +45,8 @@ final Parser<Expression> parser = () {
     ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
     ..left(string('<=').trim(), compareExpr((alg) => alg.le))
     ..left(string('>=').trim(), compareExpr((alg) => alg.ge))
-    ..left(
-        string('in').trim(),
-        compareExpr((alg) => (l, r) {
-              if ((l is! String) || (r is! String)) {
-                return false;
-              }
-              return r.contains(l);
-            }))
+    ..left(string('in').trim(), compareExpr((alg) => isStringIn))
+    ..left(string('=~').trim(), compareExpr((alg) => doesRegexMatch))
     ..left(char('<').trim(), compareExpr((alg) => alg.lt))
     ..left(char('>').trim(), compareExpr((alg) => alg.gt))
     ..left(char('=').trim(), compareExpr((alg) => alg.eq));
