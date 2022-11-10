@@ -11,8 +11,8 @@ import 'ast.dart';
 //////////////////////////////////////////
 /// FilterGrammarDefinition
 
-class FilterGrammarExpbDefinition extends GrammarDefinition<Expression> {
-  FilterGrammarExpbDefinition();
+class FilterGrammarDefinition extends GrammarDefinition<Expression> {
+  FilterGrammarDefinition();
 
   static Parser<Sequence> jsonPath() =>
       (char(r'$').optional() & selector.star())

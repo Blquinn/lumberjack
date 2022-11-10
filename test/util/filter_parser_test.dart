@@ -3,20 +3,38 @@ import 'package:lumberjack/util/filter_parser/grammar.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final grammarDef = FilterGrammarExpbDefinition();
+  final grammarDef = FilterGrammarDefinition();
   final grammar = grammarDef.build<Expression>();
 
   group('Parser', () {
     test('parse primitives', () {
-      expect((grammar.parse('200').value as Value).value, equals(200));
-      expect((grammar.parse('20.5').value as Value).value, equals(20.5));
-      expect((grammar.parse('-200').value as Value).value, equals(-200));
-      expect((grammar.parse('-20.5').value as Value).value, equals(-20.5));
-      expect((grammar.parse('true').value as Value).value, equals(true));
-      expect((grammar.parse('false').value as Value).value, equals(false));
-      expect((grammar.parse('null').value as Value).value, equals(null));
-      expect((grammar.parse('"foo"').value as Value).value, equals('foo'));
-      expect((grammar.parse("'foo'").value as Value).value, equals('foo'));
+      expect((grammar
+          .parse('200')
+          .value as Value).value, equals(200));
+      expect((grammar
+          .parse('20.5')
+          .value as Value).value, equals(20.5));
+      expect((grammar
+          .parse('-200')
+          .value as Value).value, equals(-200));
+      expect((grammar
+          .parse('-20.5')
+          .value as Value).value, equals(-20.5));
+      expect((grammar
+          .parse('true')
+          .value as Value).value, equals(true));
+      expect((grammar
+          .parse('false')
+          .value as Value).value, equals(false));
+      expect((grammar
+          .parse('null')
+          .value as Value).value, equals(null));
+      expect((grammar
+          .parse('"foo"')
+          .value as Value).value, equals('foo'));
+      expect((grammar
+          .parse("'foo'")
+          .value as Value).value, equals('foo'));
     });
 
     test('parse operators', () {
@@ -76,7 +94,7 @@ void main() {
       assert(res.value is Binary);
 
       final res2 =
-          grammar.parse(r"  .foo == 'bar' and (.bin == 3 or .bar < 4)   ");
+      grammar.parse(r"  .foo == 'bar' and (.bin == 3 or .bar < 4)   ");
       expect(res2.isSuccess, isTrue);
       assert(res2.value is Binary);
       assert((res2.value as Binary).left is Binary);
@@ -95,7 +113,7 @@ void main() {
       assert((res2.value as Unary).value is Binary);
 
       final res3 =
-          grammar.parse(r".foo == 'bar' and not (.bin == 3 or .bar == 4)");
+      grammar.parse(r".foo == 'bar' and not (.bin == 3 or .bar == 4)");
       expect(res3.isSuccess, isTrue);
       assert(res3.value is Binary);
       assert((res3.value as Binary).left is Binary);
@@ -225,7 +243,7 @@ void main() {
 
     test('not expression filters', () {
       final filter =
-          grammar.parse('.foo == 1 and not (.bin == 2 or .baz == 3)');
+      grammar.parse('.foo == 1 and not (.bin == 2 or .baz == 3)');
       expect(filter.isSuccess, isTrue);
 
       final doc1 = {"foo": 1, "bin": 4};
