@@ -1,120 +1,105 @@
-import 'package:json_path/src/selector/sequence.dart';
 import 'package:lumberjack/util/filter_parser/ast.dart';
 import 'package:lumberjack/util/filter_parser/grammar.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const grammarDef = FilterGrammarDefinition();
-  final grammar = grammarDef.build<Query>();
+  final grammarDef = FilterGrammarExpbDefinition();
+  final grammar = grammarDef.build<Expression>();
 
   group('Parser', () {
     test('parse primitives', () {
-      final prim = grammarDef.PRIMITIVE();
-      expect(prim.parse('200').value, equals(200));
-      expect(prim.parse('20.5').value, equals(20.5));
-      expect(prim.parse('-200').value, equals(-200));
-      expect(prim.parse('-20.5').value, equals(-20.5));
-      expect(prim.parse('true').value, equals(true));
-      expect(prim.parse('false').value, equals(false));
-      expect(prim.parse('null').value, equals(null));
-      expect(prim.parse('"foo"').value, equals('foo'));
-      expect(prim.parse("'foo'").value, equals('foo'));
+      expect((grammar.parse('200').value as Value).value, equals(200));
+      expect((grammar.parse('20.5').value as Value).value, equals(20.5));
+      expect((grammar.parse('-200').value as Value).value, equals(-200));
+      expect((grammar.parse('-20.5').value as Value).value, equals(-20.5));
+      expect((grammar.parse('true').value as Value).value, equals(true));
+      expect((grammar.parse('false').value as Value).value, equals(false));
+      expect((grammar.parse('null').value as Value).value, equals(null));
+      expect((grammar.parse('"foo"').value as Value).value, equals('foo'));
+      expect((grammar.parse("'foo'").value as Value).value, equals('foo'));
     });
 
     test('parse operators', () {
-      final res = grammarDef.COMP_OPERATOR().parse('==');
-      expect(res.isSuccess, isTrue);
-      expect(res.value, equals('=='));
+      final p = grammar.parse('3 == 3');
+      expect(p.isSuccess, isTrue);
+      assert(p.value is Binary);
     });
 
     test('parse selectors', () {
-      final res = grammarDef.JSON_PATH_EXPR().parse(r'$.foo');
+      final res = grammar.parse(r'$.foo');
       expect(res.isSuccess, isTrue);
+      assert(res.value is Selector);
 
-      final res2 = grammarDef.JSON_PATH_EXPR().parse(r'$["foo"]');
+      final res2 = grammar.parse(r'$["foo"]');
       expect(res2.isSuccess, isTrue);
-      // expect(res.value, equals(Sequence([Field('foo')])));
-    });
+      assert(res.value is Selector);
 
-    test('parse field/path/literal', () {
-      final pop = grammarDef.build(start: grammarDef.PRIMITIVE_OR_PATH);
-      // Field
-      final res = pop.parse(r'.foo');
-      expect(res.isSuccess, isTrue);
-      assert(res.value is Sequence);
-
-      // Path
-      final res2 = pop.parse(r'$["foo"]["bar"]');
-      expect(res2.isSuccess, isTrue);
-      assert(res2.value is Sequence);
-
-      // Primitive
-      final res3 = pop.parse(r'200');
+      final res3 = grammar.parse(r'.foo');
       expect(res3.isSuccess, isTrue);
-      expect(res3.value, equals(200));
+      assert(res3.value is Selector);
     });
 
     test('can parse a comparison', () {
-      final comp = grammarDef.build(start: grammarDef.comparison);
-
-      final res = comp.parse(r".foo   ==     'bar'");
+      final res = grammar.parse(r".foo   ==     'bar'");
       expect(res.isSuccess, isTrue);
-      assert(res.value is CompareQuery);
-      assert(res.value.left is SelectorLiteral);
-      assert(res.value.operator is PrimitiveLiteral);
-      assert(res.value.right is PrimitiveLiteral);
+      assert(res.value is Binary);
+      assert((res.value as Binary).left is Selector);
+      assert((res.value as Binary).name == '==');
+      assert((res.value as Binary).right is Value);
 
-      final res2 = comp.parse(r".foo < 3");
+      final res2 = grammar.parse(r".foo < 3");
       expect(res2.isSuccess, isTrue);
-      assert(res2.value is CompareQuery);
+      assert(res2.value is Binary);
     });
 
     test('can parse an and query', () {
       final res = grammar.parse(r"  .foo == 'bar' and .bin == 3 ");
       expect(res.isSuccess, isTrue);
-      assert(res.value is AndQuery);
-      assert((res.value as AndQuery).children[0] is CompareQuery);
-      assert((res.value as AndQuery).children[1] is CompareQuery);
+      assert(res.value is Binary);
+      assert((res.value as Binary).left is Binary);
+      assert((res.value as Binary).name == 'and');
+      assert((res.value as Binary).right is Binary);
     });
 
     test('can parse an or query', () {
-      final res = grammar.parse(r"   .foo == 'bar' or .bin == 3  ");
+      final res = grammar.parse(r"  .foo == 'bar' or .bin == 3 ");
       expect(res.isSuccess, isTrue);
-      assert(res.value is OrQuery);
-      assert((res.value as OrQuery).children[0] is CompareQuery);
-      assert((res.value as OrQuery).children[1] is CompareQuery);
+      assert(res.value is Binary);
+      assert((res.value as Binary).left is Binary);
+      assert((res.value as Binary).name == 'or');
+      assert((res.value as Binary).right is Binary);
     });
 
     test('can parse a group', () {
       final res = grammar.parse(r"(.foo == 'bar')");
       expect(res.isSuccess, isTrue);
-      assert(res.value is GroupQuery);
+      assert(res.value is Binary);
 
       final res2 =
           grammar.parse(r"  .foo == 'bar' and (.bin == 3 or .bar < 4)   ");
       expect(res2.isSuccess, isTrue);
-      assert(res2.value is AndQuery);
-      assert((res2.value as AndQuery).children[0] is CompareQuery);
-      assert((res2.value as AndQuery).children[1] is GroupQuery);
+      assert(res2.value is Binary);
+      assert((res2.value as Binary).left is Binary);
+      assert((res2.value as Binary).right is Binary);
     });
 
     test('can parse a not expression', () {
-      final res = grammar.parse(r"not .foo == 'bar'");
+      final res = grammar.parse(r"not (.foo == 'bar')");
       expect(res.isSuccess, isTrue);
-      assert(res.value is NotQuery);
-      assert((res.value as NotQuery).child is CompareQuery);
+      assert(res.value is Unary);
+      assert((res.value as Unary).value is Binary);
 
       final res2 = grammar.parse(r"!(.foo == 'bar')");
       expect(res2.isSuccess, isTrue);
-      assert(res2.value is NotQuery);
-      assert((res2.value as NotQuery).child is GroupQuery);
+      assert(res2.value is Unary);
+      assert((res2.value as Unary).value is Binary);
 
       final res3 =
           grammar.parse(r".foo == 'bar' and not (.bin == 3 or .bar == 4)");
       expect(res3.isSuccess, isTrue);
-      assert(res3.value is AndQuery);
-      assert((res3.value as AndQuery).children[0] is CompareQuery);
-      assert((res3.value as AndQuery).children[1] is NotQuery);
+      assert(res3.value is Binary);
+      assert((res3.value as Binary).left is Binary);
+      assert((res3.value as Binary).right is Unary);
     });
   });
 
@@ -123,8 +108,42 @@ void main() {
       final result = grammar.parse('.foo == "bar"');
       final doc = {"foo": "bar"};
       expect(result.isSuccess, isTrue);
-      final match = result.value.eval(MatchEvaluator(doc));
+      final match = result.value.eval(Evaluator(doc));
       expect(match, isTrue);
+    });
+
+    test('truthy values dont filter', () {
+      final result = grammar.parse('true');
+      final doc = {"foo": "bar"};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(Evaluator(doc));
+      expect(match, isTrue);
+
+      final result2 = grammar.parse('.foo');
+      final doc2 = {"foo": "bar"};
+      expect(result2.isSuccess, isTrue);
+      final match2 = result.value.eval(Evaluator(doc2));
+      expect(match2, isTrue);
+    });
+
+    test('non-truthy values filter', () {
+      final result = grammar.parse('false');
+      final doc = {"foo": "bar"};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(Evaluator(doc));
+      expect(match, isFalse);
+
+      final result2 = grammar.parse('.bar');
+      final doc2 = {"foo": "bar"};
+      expect(result2.isSuccess, isTrue);
+      final match2 = result.value.eval(Evaluator(doc2));
+      expect(match2, isFalse);
+
+      final result3 = grammar.parse('.foo');
+      final doc3 = {"foo": 0};
+      expect(result3.isSuccess, isTrue);
+      final match3 = result.value.eval(Evaluator(doc3));
+      expect(match3, isFalse);
     });
 
     test('filter works on nested selectors', () {
@@ -133,7 +152,7 @@ void main() {
         "foo": {"bar": 3}
       };
       expect(result.isSuccess, isTrue);
-      final match = result.value.eval(MatchEvaluator(doc));
+      final match = result.value.eval(Evaluator(doc));
       expect(match, isTrue);
     });
 
@@ -141,7 +160,7 @@ void main() {
       final result = grammar.parse('.foo == "blah"');
       final doc = {"foo": "bar"};
       expect(result.isSuccess, isTrue);
-      final match = result.value.eval(MatchEvaluator(doc));
+      final match = result.value.eval(Evaluator(doc));
       expect(match, isFalse);
     });
 
@@ -149,7 +168,7 @@ void main() {
       final result = grammar.parse('.flub == "blah"');
       final doc = {"foo": "bar"};
       expect(result.isSuccess, isTrue);
-      final match = result.value.eval(MatchEvaluator(doc));
+      final match = result.value.eval(Evaluator(doc));
       expect(match, isFalse);
     });
 
@@ -157,12 +176,12 @@ void main() {
       final result = grammar.parse('.foo == "bar" and .bin == 3');
       final doc = {"foo": "bar", "bin": 3};
       expect(result.isSuccess, isTrue);
-      final match = result.value.eval(MatchEvaluator(doc));
+      final match = result.value.eval(Evaluator(doc));
       expect(match, isTrue);
 
       final result2 = grammar.parse('.foo == "bar" and .bin == 4');
       expect(result2.isSuccess, isTrue);
-      final match2 = result2.value.eval(MatchEvaluator(doc));
+      final match2 = result2.value.eval(Evaluator(doc));
       expect(match2, isFalse);
     });
 
@@ -171,15 +190,15 @@ void main() {
       expect(filter.isSuccess, isTrue);
 
       final doc1 = {"foo": "bar", "bin": 4};
-      final match = filter.value.eval(MatchEvaluator(doc1));
+      final match = filter.value.eval(Evaluator(doc1));
       expect(match, isTrue);
 
       final doc2 = {"foo": "quux", "bin": 3};
-      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      final match2 = filter.value.eval(Evaluator(doc2));
       expect(match2, isTrue);
 
       final doc3 = {"foo": "quux", "bin": 4};
-      final match3 = filter.value.eval(MatchEvaluator(doc3));
+      final match3 = filter.value.eval(Evaluator(doc3));
       expect(match3, isFalse);
     });
 
@@ -188,19 +207,19 @@ void main() {
       expect(filter.isSuccess, isTrue);
 
       final doc1 = {"foo": 1, "bin": 4};
-      final match = filter.value.eval(MatchEvaluator(doc1));
+      final match = filter.value.eval(Evaluator(doc1));
       expect(match, isTrue);
 
       final doc2 = {"foo": 2, "bin": 2, "baz": 3};
-      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      final match2 = filter.value.eval(Evaluator(doc2));
       expect(match2, isTrue);
 
       final doc3 = {"foo": "quux", "bin": 2};
-      final match3 = filter.value.eval(MatchEvaluator(doc3));
+      final match3 = filter.value.eval(Evaluator(doc3));
       expect(match3, isFalse);
 
       final doc4 = {"foo": "quux", "baz": 3};
-      final match4 = filter.value.eval(MatchEvaluator(doc4));
+      final match4 = filter.value.eval(Evaluator(doc4));
       expect(match4, isFalse);
     });
 
@@ -210,11 +229,11 @@ void main() {
       expect(filter.isSuccess, isTrue);
 
       final doc1 = {"foo": 1, "bin": 4};
-      final match = filter.value.eval(MatchEvaluator(doc1));
+      final match = filter.value.eval(Evaluator(doc1));
       expect(match, isTrue);
 
       final doc2 = {"foo": 1, "bin": 2};
-      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      final match2 = filter.value.eval(Evaluator(doc2));
       expect(match2, isFalse);
     });
   });

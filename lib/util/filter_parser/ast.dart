@@ -1,286 +1,142 @@
-import 'package:json_path/json_path.dart';
-import 'package:json_path/src/selector.dart';
-
-// import 'package:json_path/src/grammar/number.dart';
-// import 'package:json_path/src/grammar/strings.dart';
-// import 'package:json_path/src/grammar/selector.dart';
-// import 'package:json_path/src/grammar/number.dart';
-// import 'package:json_path/src/selector/field.dart';
-// import 'package:json_path/src/selector/sequence.dart';
-// import 'package:json_path/src/parser_ext.dart';
-// import 'package:json_path/src/algebra.dart';
-// import 'package:json_path/src/selector.dart';
+import 'package:json_path/src/selector.dart' as sel;
 import 'package:json_path/src/root_match.dart';
+import 'package:json_path/src/matching_context.dart';
+import 'package:json_path/src/algebra.dart';
 
-/// A class that describes the position of the source text.
-class SourcePosition {
-  const SourcePosition(this.start, this.end);
-
-  /// The start position of this query.
-  final int start;
-
-  /// The end position of this query, exclusive.
-  final int end;
-
-  // The length of this query, in characters.
-  int get length => end - start;
-}
-
-/// Provides an interface for generic query evaluation.
-abstract class QueryEvaluator<R> {
-  List<dynamic> evalSelector(SelectorLiteral selector);
-
-  R evalCompare(CompareQuery query);
-
-  R evalNot(NotQuery query);
-
-  R evalGroup(GroupQuery query);
-
-  R evalAnd(AndQuery query);
-
-  R evalOr(OrQuery query);
-}
-
-class MatchEvaluator implements QueryEvaluator<bool> {
+class Evaluator {
   final dynamic document; // The root "json" object.
-  MatchEvaluator(this.document);
+  final Algebra algebra;
 
-  @override
-  List<dynamic> evalSelector(SelectorLiteral selector) {
+  Evaluator(this.document, {this.algebra = Algebra.relaxed});
+
+  bool eval(Expression expr) {
+    switch (expr.runtimeType) {
+      case Value:
+        return evalValue(expr as Value);
+      case Selector:
+        return evalSelector(expr as Selector);
+      case Binary:
+        final bin = expr as Binary;
+        return bin.function(this, bin.left, bin.right);
+      case Unary:
+        final un = expr as Unary;
+        return un.function(this, un.value);
+      default:
+        throw UnsupportedError('Received expression of unhandled type $expr');
+    }
+  }
+
+  bool evalValue(Value value) {
+    return algebra.isTruthy(value.value);
+  }
+
+  bool evalSelector(Selector selector) {
+    final matches = selector.selector
+        .apply(RootMatch(document, MatchingContext({}, algebra)))
+        .toList();
+
+    if (matches.length != 1) {
+      return false;
+    }
+
+    return algebra.isTruthy(matches[0].value);
+  }
+
+  List<dynamic> selectorToMatchValues(Selector selector) {
     return selector.selector
-        .apply(RootMatch(document, const MatchingContext({}, Algebra.strict)))
+        .apply(RootMatch(document, MatchingContext({}, algebra)))
         .map((e) => e.value)
         .toList();
   }
 
-  @override
-  bool evalCompare(CompareQuery query) {
-    dynamic left = query.left.eval(this);
-    dynamic right = query.right.eval(this);
+  bool evalCompare(Expression left, String operator, Expression right) {
+    dynamic leftVal;
+    dynamic rightVal;
 
-    if (left is List) {
-      if (left.length != 1) {
+    if (left is Selector) {
+      final matches = selectorToMatchValues(left);
+      if (matches.length != 1) {
         return false;
       }
-      left = left[0];
+
+      leftVal = matches[0];
+    } else if (left is Value) {
+      leftVal = left.value;
     }
 
-    if (right is List) {
-      if (right.length != 1) {
+    if (right is Selector) {
+      final matches = selectorToMatchValues(right);
+      if (matches.length != 1) {
         return false;
       }
-      right = right[0];
+
+      rightVal = matches[0];
+    } else if (right is Value) {
+      rightVal = right.value;
     }
 
-    const alg = Algebra.relaxed;
-
-    switch (query.operator.value) {
+    switch (operator) {
       case "==":
       case "=":
-        return alg.eq(left, right);
+        return algebra.eq(leftVal, rightVal);
       case "!=":
-        return alg.ne(left, right);
+        return algebra.ne(leftVal, rightVal);
       case "<":
-        return alg.lt(left, right);
+        return algebra.lt(leftVal, rightVal);
       case ">":
-        return alg.gt(left, right);
+        return algebra.gt(leftVal, rightVal);
       case "<=":
-        return alg.le(left, right);
+        return algebra.le(leftVal, rightVal);
       case ">=":
-        return alg.ge(left, right);
+        return algebra.ge(leftVal, rightVal);
       default:
-        throw UnsupportedError(
-            'The operator ${query.operator.value} is not supported.');
+        throw UnsupportedError('The operator $operator is not supported.');
     }
-  }
-
-  @override
-  bool evalGroup(GroupQuery query) {
-    return query.child.eval(this);
-  }
-
-  @override
-  bool evalNot(NotQuery query) {
-    return !query.child.eval(this);
-  }
-
-  @override
-  bool evalOr(OrQuery query) {
-    for (final child in query.children) {
-      if (child.eval(this)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  @override
-  bool evalAnd(AndQuery query) {
-    for (final child in query.children) {
-      if (!child.eval(this)) {
-        return false;
-      }
-    }
-
-    return true;
   }
 }
 
-/// Base interface for queries.
-abstract class Query {
-  const Query({
-    required this.position,
-  });
-
-  /// The position of this query relative to the source.
-  final SourcePosition position;
-
-  /// Returns a String-representation of this [Query].
-  ///
-  /// Implementation should aim to provide a format that can be parsed to the
-  /// same form.
-  ///
-  /// [debug] is used to extend the format with additional characters, making
-  /// testing unambiguous.
-  @override
-  String toString({bool debug = false});
-
-  /// Returns this [Query] cast as [R]
-  ///
-  /// If the [Query] cannot be cast to [R] it will throw an exception.
-  R cast<R extends Query>() => this as R;
-
-  R eval<R>(QueryEvaluator<R> evaluator);
+abstract class Expression {
+  bool eval(Evaluator evaluator);
 }
 
-abstract class Literal {
-  const Literal();
+class Value extends Expression {
+  Value(this.value);
 
-  dynamic eval(QueryEvaluator evaluator);
-}
-
-/// Value expression.
-class PrimitiveLiteral extends Literal {
-  final SourcePosition position;
   final dynamic value;
 
-  const PrimitiveLiteral({
-    required this.value,
-    required this.position,
-  });
-
   @override
-  dynamic eval(QueryEvaluator evaluator) => value;
-
-  @override
-  String toString({bool debug = false}) => _debug(debug, value);
+  bool eval(Evaluator evaluator) => evaluator.evalValue(this);
 }
 
-/// Value expression.
-class SelectorLiteral extends Literal {
-  final Selector selector;
-  final SourcePosition position;
+class Selector extends Expression {
+  Selector(this.selector);
 
-  const SelectorLiteral({
-    required this.selector,
-    required this.position,
-  });
-
-  // TODO: If no match, indicate no match somehow.
-  @override
-  List<dynamic> eval(QueryEvaluator evaluator) => evaluator.evalSelector(this);
+  final sel.Selector selector;
 
   @override
-  String toString({bool debug = false}) => _debug(debug, selector.toString());
+  bool eval(Evaluator evaluator) => evaluator.evalSelector(this);
 }
 
-// /// Describes a [field] [operator] [text] tripled (e.g. year < 2000).
-// // ignore: deprecated_member_use_from_same_package
-class CompareQuery extends Query {
-  final Literal left;
-  final PrimitiveLiteral operator;
-  final Literal right;
+class Unary extends Expression {
+  Unary(this.name, this.value, this.function);
 
-  CompareQuery({
-    required this.left,
-    required this.operator,
-    required this.right,
-    required super.position,
-  });
+  final String name;
+  final Expression value;
+  final bool Function(Evaluator evaluator, Expression value) function;
 
   @override
-  R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalCompare(this);
-
-  @override
-  String toString({bool debug = false}) =>
-      _debug(debug, '$left$operator$right');
+  bool eval(Evaluator evaluator) => function(evaluator, value);
 }
 
-/// Negates the [child] query. (bool NOT)
-class NotQuery extends Query {
-  final Query child;
+class Binary extends Expression {
+  Binary(this.name, this.left, this.right, this.function);
 
-  const NotQuery({
-    required this.child,
-    required super.position,
-  });
-
-  @override
-  R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalNot(this);
+  final String name;
+  final Expression left;
+  final Expression right;
+  final bool Function(Evaluator evaluator, Expression left, Expression right)
+      function;
 
   @override
-  String toString({bool debug = false}) => '!${child.toString(debug: debug)}';
+  bool eval(Evaluator evaluator) => function(evaluator, left, right);
 }
-
-/// Groups the [child] query to override implicit precedence.
-class GroupQuery extends Query {
-  final Query child;
-
-  const GroupQuery({
-    required this.child,
-    required super.position,
-  });
-
-  @override
-  R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalGroup(this);
-
-  @override
-  String toString({bool debug = false}) => '(${child.toString(debug: debug)})';
-}
-
-/// Bool AND composition of [children] queries.
-class AndQuery extends Query {
-  final List<Query> children;
-
-  const AndQuery({
-    required this.children,
-    required super.position,
-  });
-
-  @override
-  R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalAnd(this);
-
-  @override
-  String toString({bool debug = false}) =>
-      '(${children.map((n) => n.toString(debug: debug)).join(' ')})';
-}
-
-/// Bool OR composition of [children] queries.
-class OrQuery extends Query {
-  final List<Query> children;
-
-  const OrQuery({
-    required this.children,
-    required super.position,
-  });
-
-  @override
-  R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalOr(this);
-
-  @override
-  String toString({bool debug = false}) =>
-      '(${children.map((n) => n.toString(debug: debug)).join(' OR ')})';
-}
-
-String _debug(bool debug, String expr) => debug ? '<$expr>' : expr;

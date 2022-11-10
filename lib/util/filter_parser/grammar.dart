@@ -1,146 +1,72 @@
-// Adapted from https://github.com/isoos/query
-// ignore_for_file: non_constant_identifier_names
-
 import 'package:petitparser/petitparser.dart';
 import 'package:json_path/src/grammar/strings.dart';
 import 'package:json_path/src/grammar/selector.dart';
 import 'package:json_path/src/grammar/number.dart';
 import 'package:json_path/src/selector/sequence.dart';
-import 'package:json_path/src/selector.dart';
+import 'package:json_path/src/selector.dart' as sel;
 
 import 'ast.dart';
 
 //////////////////////////////////////////
 /// FilterGrammarDefinition
 
-class FilterGrammarDefinition extends GrammarDefinition<Query> {
-  const FilterGrammarDefinition();
+class FilterGrammarExpbDefinition extends GrammarDefinition<Expression> {
+  FilterGrammarExpbDefinition();
 
-  @override
-  Parser<Query> start() => ref0(root).end();
-
-  Parser token(Parser parser) => parser.flatten().trim();
-
-  // Handles <exp> AND <exp> sequences (where AND is not optional)
-  Parser<Query> root() {
-    final g = ref0(or) &
-        (ref0(rootSep) & ref0(or))
-            .skip(after: whitespace().star())
-            .map((list) => list.last)
-            .star();
-
-    return g.token().map((list) {
-      final children = <Query>[
-        list.value.first as Query,
-        ...(list.value.last as List).cast<Query>(),
-      ];
-      if (children.length == 1) return children.single;
-      return AndQuery(
-          children: children, position: SourcePosition(list.start, list.stop));
-    });
-  }
-
-  Parser rootSep() =>
-      (whitespace().star() & stringIgnoreCase('and') & whitespace().star());
-
-  // Handles <exp> OR <exp> sequences.
-  Parser<Query> or() {
-    final g = ref0(expression).skip(before: whitespace().star()) &
-        (whitespace().plus() &
-                stringIgnoreCase('or') &
-                whitespace().plus() &
-                ref0(root).skip(after: whitespace().star()))
-            .map((list) => list.last)
-            .star();
-
-    return g.token().map((list) {
-      final children = <Query>[
-        list.value.first as Query,
-        for (final query in (list.value.last as List).cast<Query>())
-          // flatten OrQuery children
-          if (query is OrQuery)
-            for (final child in query.children) child
-          else
-            query,
-      ];
-      if (children.length == 1) return children.single;
-      return OrQuery(
-          children: children, position: SourcePosition(list.start, list.stop));
-    });
-  }
-
-  Parser<NotQuery> not() {
-    final g = (stringIgnoreCase('not') | char('!')) &
-        whitespace().star() &
-        ref0(root);
-    return g.token().map((list) => NotQuery(
-          child: list.value[2],
-          position: SourcePosition(list.start, list.stop),
-        ));
-  }
-
-  Parser expression() => ref0(group) | ref0(comparison) | ref0(not);
-
-  Parser<GroupQuery> group() {
-    final g = char('(') &
-        whitespace().star() &
-        ref0(root) &
-        whitespace().star() &
-        char(')');
-    return g.token().map((list) => GroupQuery(
-        child: list.value[2] as Query,
-        position: SourcePosition(list.start, list.stop)));
-  }
-
-  // Can have either a json path, or a value on either side,
-  // Separated by a comparison operator.
-  Parser<CompareQuery> comparison() {
-    final g = ref0(PRIMITIVE_OR_PATH) &
-        whitespace().star() &
-        ref0(COMP_OPERATOR) &
-        whitespace().star() &
-        ref0(PRIMITIVE_OR_PATH);
-
-    return g.token().map((list) {
-      final position = SourcePosition(list.start, list.stop);
-
-      return CompareQuery(
-          left: transformLiteral(position, list.value[0]),
-          operator: PrimitiveLiteral(position: position, value: list.value[2]),
-          right: transformLiteral(position, list.value[4]),
-          position: position);
-    });
-  }
-
-  Parser<dynamic> PRIMITIVE_OR_PATH() => ref0(PRIMITIVE) | ref0(JSON_PATH_EXPR);
-
-  // Transforms the value from FIELD_OR_PATH to a Literal
-  Literal transformLiteral(SourcePosition position, dynamic val) {
-    if (val is Selector) {
-      return SelectorLiteral(selector: val, position: position);
-    } else {
-      return PrimitiveLiteral(value: val, position: position);
-    }
-  }
-
-  Parser<Sequence> JSON_PATH_EXPR() => (char(r'$').optional() & selector.star())
-      .map((value) => Sequence(value[1].cast<Selector>()));
-
-  Parser<String> COMP_OPERATOR() => (string('<=') |
+  static Parser<String> compareOperator() => (string('<=') |
           string('<') |
           string('>=') |
           string('>') |
           string('!=') |
           string('==') |
-          string('=')
-      // string('=~') |
-      // stringIgnoreCase('in') |
-      )
+          string('='))
       .flatten();
 
-  Parser<dynamic> PRIMITIVE() => (string('null').map((_) => null) |
-      string('false').map((_) => false) |
-      string('true').map((_) => true) |
-      number |
-      quotedString);
+  static Parser<Sequence> jsonPath() =>
+      (char(r'$').optional() & selector.star())
+          .map((value) => Sequence(value[1].cast<sel.Selector>()));
+
+  final Parser<Expression> _expr = () {
+    final builder = ExpressionBuilder<Expression>();
+
+    // Primitive values
+    builder.group()
+      ..primitive(stringIgnoreCase('null').trim().map((value) => Value(null)))
+      ..primitive(stringIgnoreCase('false').trim().map((value) => Value(false)))
+      ..primitive(stringIgnoreCase('true').trim().map((value) => Value(true)))
+      ..primitive(number.trim().map((value) => Value(value)))
+      ..primitive(quotedString.trim().map((value) => Value(value)))
+      ..primitive(ref0(jsonPath).trim().map((value) => Selector(value)))
+      ..wrapper(
+          char('(').trim(), char(')').trim(), (left, value, right) => value);
+
+    // Negation operators
+    builder.group()
+      ..prefix(stringIgnoreCase('not').trim(),
+          (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)))
+      ..prefix(stringIgnoreCase('!').trim(),
+          (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)));
+
+    // Comparison operators
+    builder.group().left(
+        ref0(compareOperator).trim(),
+        (left, operator, right) => Binary(operator, left, right,
+            (ev, l, r) => ev.evalCompare(l, operator, r)));
+
+    // Boolean operators
+    builder.group()
+      ..left(
+          stringIgnoreCase('and').trim(),
+          (left, operator, right) => Binary(
+              'and', left, right, (ev, l, r) => ev.eval(l) && ev.eval(r)))
+      ..left(
+          stringIgnoreCase('or').trim(),
+          (left, operator, right) => Binary(
+              'or', left, right, (ev, l, r) => ev.eval(l) || ev.eval(r)));
+
+    return builder.build().end();
+  }();
+
+  @override
+  Parser<Expression> start() => _expr;
 }
