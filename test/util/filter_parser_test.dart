@@ -1,11 +1,12 @@
+import 'dart:math';
+
 import 'package:lumberjack/util/filter_parser/ast.dart';
 import 'package:lumberjack/util/filter_parser/evaluator.dart';
 import 'package:lumberjack/util/filter_parser/grammar.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final grammarDef = FilterGrammarDefinition();
-  final grammar = grammarDef.build<Expression>();
+  final grammar = parser;
 
   group('Parser', () {
     test('parse primitives', () {
@@ -21,9 +22,49 @@ void main() {
     });
 
     test('parse operators', () {
-      final p = grammar.parse('3 == 3');
+      var p = grammar.parse('1 == 1');
       expect(p.isSuccess, isTrue);
-      assert(p.value is Binary);
+      expect(p.value, isA<Binary>());
+
+      p = grammar.parse('1 = 1');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 != 2');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 < 2');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 > 2');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isFalse);
+
+      p = grammar.parse('1 <= 2');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 <= 1');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 >= 1');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isTrue);
+
+      p = grammar.parse('1 >= 2');
+      expect(p.isSuccess, isTrue);
+      expect(p.value, isA<Binary>());
+      expect(p.value.eval(Evaluator({})), isFalse);
     });
 
     test('parse selectors', () {

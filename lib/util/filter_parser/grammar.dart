@@ -11,61 +11,52 @@ import 'ast.dart';
 //////////////////////////////////////////
 /// FilterGrammarDefinition
 
-class FilterGrammarDefinition extends GrammarDefinition<Expression> {
-  FilterGrammarDefinition();
+Parser<Sequence> jsonPath() => (char(r'$').optional() & selector.star())
+    .map((value) => Sequence(value[1].cast<sel.Selector>()));
 
-  static Parser<Sequence> jsonPath() =>
-      (char(r'$').optional() & selector.star())
-          .map((value) => Sequence(value[1].cast<sel.Selector>()));
+final Parser<Expression> parser = () {
+  final builder = ExpressionBuilder<Expression>();
+  // Primitive values
+  builder.group()
+    ..primitive(stringIgnoreCase('null').trim().map((value) => Value(null)))
+    ..primitive(stringIgnoreCase('false').trim().map((value) => Value(false)))
+    ..primitive(stringIgnoreCase('true').trim().map((value) => Value(true)))
+    ..primitive(number.trim().map((value) => Value(value)))
+    ..primitive(quotedString.trim().map((value) => Value(value)))
+    ..primitive(ref0(jsonPath).trim().map((value) => Selector(value)))
+    ..wrapper(
+        char('(').trim(), char(')').trim(), (left, value, right) => value);
 
-  final Parser<Expression> _expr = () {
-    final builder = ExpressionBuilder<Expression>();
+  // Negation operators
+  builder.group()
+    ..prefix(stringIgnoreCase('not').trim(),
+        (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)))
+    ..prefix(stringIgnoreCase('!').trim(),
+        (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)));
 
-    // Primitive values
-    builder.group()
-      ..primitive(stringIgnoreCase('null').trim().map((value) => Value(null)))
-      ..primitive(stringIgnoreCase('false').trim().map((value) => Value(false)))
-      ..primitive(stringIgnoreCase('true').trim().map((value) => Value(true)))
-      ..primitive(number.trim().map((value) => Value(value)))
-      ..primitive(quotedString.trim().map((value) => Value(value)))
-      ..primitive(ref0(jsonPath).trim().map((value) => Selector(value)))
-      ..wrapper(
-          char('(').trim(), char(')').trim(), (left, value, right) => value);
+  // Comparison operators
+  builder.group()
+    ..left(string('==').trim(), compareExpr((alg) => alg.eq))
+    ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
+    ..left(string('<=').trim(), compareExpr((alg) => alg.le))
+    ..left(string('>=').trim(), compareExpr((alg) => alg.ge))
+    ..left(char('<').trim(), compareExpr((alg) => alg.lt))
+    ..left(char('>').trim(), compareExpr((alg) => alg.gt))
+    ..left(char('=').trim(), compareExpr((alg) => alg.eq));
 
-    // Negation operators
-    builder.group()
-      ..prefix(stringIgnoreCase('not').trim(),
-          (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)))
-      ..prefix(stringIgnoreCase('!').trim(),
-          (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)));
+  // Boolean operators
+  builder.group()
+    ..left(
+        stringIgnoreCase('and').trim(),
+        (left, operator, right) =>
+            Binary('and', left, right, (ev, l, r) => ev.eval(l) && ev.eval(r)))
+    ..left(
+        stringIgnoreCase('or').trim(),
+        (left, operator, right) =>
+            Binary('or', left, right, (ev, l, r) => ev.eval(l) || ev.eval(r)));
 
-    // Comparison operators
-    builder.group()
-      ..left(string('==').trim(), compareExpr((alg) => alg.eq))
-      ..left(string('=').trim(), compareExpr((alg) => alg.eq))
-      ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
-      ..left(string('<').trim(), compareExpr((alg) => alg.lt))
-      ..left(string('>').trim(), compareExpr((alg) => alg.gt))
-      ..left(string('<=').trim(), compareExpr((alg) => alg.le))
-      ..left(string('>=').trim(), compareExpr((alg) => alg.ge));
-
-    // Boolean operators
-    builder.group()
-      ..left(
-          stringIgnoreCase('and').trim(),
-          (left, operator, right) => Binary(
-              'and', left, right, (ev, l, r) => ev.eval(l) && ev.eval(r)))
-      ..left(
-          stringIgnoreCase('or').trim(),
-          (left, operator, right) => Binary(
-              'or', left, right, (ev, l, r) => ev.eval(l) || ev.eval(r)));
-
-    return builder.build().end();
-  }();
-
-  @override
-  Parser<Expression> start() => _expr;
-}
+  return builder.build().end();
+}();
 
 // Creates a binary expression that compares two other expressions.
 Expression Function(Expression left, String operator, Expression right)
