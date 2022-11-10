@@ -97,6 +97,25 @@ void main() {
       assert((res2.value as AndQuery).children[0] is CompareQuery);
       assert((res2.value as AndQuery).children[1] is GroupQuery);
     });
+
+    test('can parse a not expression', () {
+      final res = grammar.parse(r"not .foo == 'bar'");
+      expect(res.isSuccess, isTrue);
+      assert(res.value is NotQuery);
+      assert((res.value as NotQuery).child is CompareQuery);
+
+      final res2 = grammar.parse(r"!(.foo == 'bar')");
+      expect(res2.isSuccess, isTrue);
+      assert(res2.value is NotQuery);
+      assert((res2.value as NotQuery).child is GroupQuery);
+
+      final res3 =
+          grammar.parse(r".foo == 'bar' and not (.bin == 3 or .bar == 4)");
+      expect(res3.isSuccess, isTrue);
+      assert(res3.value is AndQuery);
+      assert((res3.value as AndQuery).children[0] is CompareQuery);
+      assert((res3.value as AndQuery).children[1] is NotQuery);
+    });
   });
 
   group('Filter', () {
@@ -183,6 +202,20 @@ void main() {
       final doc4 = {"foo": "quux", "baz": 3};
       final match4 = filter.value.eval(MatchEvaluator(doc4));
       expect(match4, isFalse);
+    });
+
+    test('not expression filters', () {
+      final filter =
+          grammar.parse('.foo == 1 and not (.bin == 2 or .baz == 3)');
+      expect(filter.isSuccess, isTrue);
+
+      final doc1 = {"foo": 1, "bin": 4};
+      final match = filter.value.eval(MatchEvaluator(doc1));
+      expect(match, isTrue);
+
+      final doc2 = {"foo": 1, "bin": 2};
+      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      expect(match2, isFalse);
     });
   });
 }

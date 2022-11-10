@@ -69,7 +69,17 @@ class FilterGrammarDefinition extends GrammarDefinition<Query> {
     });
   }
 
-  Parser expression() => ref0(group) | ref0(comparison);
+  Parser<NotQuery> not() {
+    final g = (stringIgnoreCase('not') | char('!')) &
+        whitespace().star() &
+        ref0(root);
+    return g.token().map((list) => NotQuery(
+          child: list.value[2],
+          position: SourcePosition(list.start, list.stop),
+        ));
+  }
+
+  Parser expression() => ref0(group) | ref0(comparison) | ref0(not);
 
   Parser<GroupQuery> group() {
     final g = char('(') &

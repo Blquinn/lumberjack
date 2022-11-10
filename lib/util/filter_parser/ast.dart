@@ -101,7 +101,7 @@ class MatchEvaluator implements QueryEvaluator<bool> {
 
   @override
   bool evalNot(NotQuery query) {
-    return !query.eval(this);
+    return !query.child.eval(this);
   }
 
   @override
@@ -230,7 +230,7 @@ class NotQuery extends Query {
   R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalNot(this);
 
   @override
-  String toString({bool debug = false}) => '-${child.toString(debug: debug)}';
+  String toString({bool debug = false}) => '!${child.toString(debug: debug)}';
 }
 
 /// Groups the [child] query to override implicit precedence.
