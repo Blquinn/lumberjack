@@ -1,3 +1,4 @@
+import 'package:json_path/json_path.dart';
 import 'package:petitparser/petitparser.dart';
 import 'package:json_path/src/grammar/strings.dart';
 import 'package:json_path/src/grammar/selector.dart';
@@ -12,15 +13,6 @@ import 'ast.dart';
 
 class FilterGrammarExpbDefinition extends GrammarDefinition<Expression> {
   FilterGrammarExpbDefinition();
-
-  static Parser<String> compareOperator() => (string('<=') |
-          string('<') |
-          string('>=') |
-          string('>') |
-          string('!=') |
-          string('==') |
-          string('='))
-      .flatten();
 
   static Parser<Sequence> jsonPath() =>
       (char(r'$').optional() & selector.star())
@@ -48,10 +40,14 @@ class FilterGrammarExpbDefinition extends GrammarDefinition<Expression> {
           (op, a) => Unary('!', a, (ev, expr) => !ev.eval(expr)));
 
     // Comparison operators
-    builder.group().left(
-        ref0(compareOperator).trim(),
-        (left, operator, right) => Binary(operator, left, right,
-            (ev, l, r) => ev.evalCompare(l, operator, r)));
+    builder.group()
+      ..left(string('==').trim(), compareExpr((alg) => alg.eq))
+      ..left(string('=').trim(), compareExpr((alg) => alg.eq))
+      ..left(string('!=').trim(), compareExpr((alg) => alg.ne))
+      ..left(string('<').trim(), compareExpr((alg) => alg.lt))
+      ..left(string('>').trim(), compareExpr((alg) => alg.gt))
+      ..left(string('<=').trim(), compareExpr((alg) => alg.le))
+      ..left(string('>=').trim(), compareExpr((alg) => alg.ge));
 
     // Boolean operators
     builder.group()
@@ -69,4 +65,11 @@ class FilterGrammarExpbDefinition extends GrammarDefinition<Expression> {
 
   @override
   Parser<Expression> start() => _expr;
+}
+
+// Creates a binary expression that compares two other expressions.
+Expression Function(Expression left, String operator, Expression right)
+    compareExpr(bool Function(dynamic, dynamic) Function(Algebra alg) opFunc) {
+  return (l, o, r) =>
+      Binary(o, l, r, (ev, l, r) => ev.evalCompare(l, opFunc(ev.algebra), r));
 }

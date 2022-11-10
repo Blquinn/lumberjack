@@ -49,7 +49,8 @@ class Evaluator {
         .toList();
   }
 
-  bool evalCompare(Expression left, String operator, Expression right) {
+  bool evalCompare(Expression left, bool Function(dynamic, dynamic) operator,
+      Expression right) {
     dynamic leftVal;
     dynamic rightVal;
 
@@ -75,23 +76,7 @@ class Evaluator {
       rightVal = right.value;
     }
 
-    switch (operator) {
-      case "==":
-      case "=":
-        return algebra.eq(leftVal, rightVal);
-      case "!=":
-        return algebra.ne(leftVal, rightVal);
-      case "<":
-        return algebra.lt(leftVal, rightVal);
-      case ">":
-        return algebra.gt(leftVal, rightVal);
-      case "<=":
-        return algebra.le(leftVal, rightVal);
-      case ">=":
-        return algebra.ge(leftVal, rightVal);
-      default:
-        throw UnsupportedError('The operator $operator is not supported.');
-    }
+    return operator(leftVal, rightVal);
   }
 }
 
@@ -135,7 +120,7 @@ class Binary extends Expression {
   final Expression left;
   final Expression right;
   final bool Function(Evaluator evaluator, Expression left, Expression right)
-      function;
+  function;
 
   @override
   bool eval(Evaluator evaluator) => function(evaluator, left, right);
