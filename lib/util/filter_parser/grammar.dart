@@ -13,7 +13,7 @@ import 'ast.dart';
 //////////////////////////////////////////
 /// FilterGrammarDefinition
 
-class FilterGrammarDefinition extends GrammarDefinition {
+class FilterGrammarDefinition extends GrammarDefinition<Query> {
   const FilterGrammarDefinition();
 
   @override

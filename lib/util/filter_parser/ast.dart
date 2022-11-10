@@ -1,5 +1,6 @@
 import 'package:json_path/json_path.dart';
 import 'package:json_path/src/selector.dart';
+
 // import 'package:json_path/src/grammar/number.dart';
 // import 'package:json_path/src/grammar/strings.dart';
 // import 'package:json_path/src/grammar/selector.dart';
@@ -27,25 +28,104 @@ class SourcePosition {
 
 /// Provides an interface for generic query evaluation.
 abstract class QueryEvaluator<R> {
-  // R evalText(TextQuery query);
-  // R evalValue(ValueQuery query);
-  // R evalPhrase(PhraseQuery query);
-  // R evalJsonPath(SelectorLiteral path);
-  // R evalScope(ScopeQuery query);
+  List<dynamic> evalSelector(SelectorLiteral selector);
+
   R evalCompare(CompareQuery query);
-  // R evalRange(RangeQuery query);
+
   R evalNot(NotQuery query);
+
   R evalGroup(GroupQuery query);
+
   R evalAnd(AndQuery query);
+
   R evalOr(OrQuery query);
 }
 
-// class MatchEvaluator implements QueryEvaluator<bool> {
-//   final dynamic json; // The root "json" object.
+class MatchEvaluator implements QueryEvaluator<bool> {
+  final dynamic document; // The root "json" object.
+  MatchEvaluator(this.document);
 
-//   MatchEvaluator(this.json);
+  @override
+  List<dynamic> evalSelector(SelectorLiteral selector) {
+    return selector.selector
+        .apply(RootMatch(document, const MatchingContext({}, Algebra.strict)))
+        .map((e) => e.value)
+        .toList();
+  }
 
-// }
+  @override
+  bool evalCompare(CompareQuery query) {
+    dynamic left = query.left.eval(this);
+    dynamic right = query.right.eval(this);
+
+    if (left is List) {
+      if (left.length != 1) {
+        return false;
+      }
+      left = left[0];
+    }
+
+    if (right is List) {
+      if (right.length != 1) {
+        return false;
+      }
+      right = right[0];
+    }
+
+    const alg = Algebra.relaxed;
+
+    switch (query.operator.value) {
+      case "==":
+      case "=":
+        return alg.eq(left, right);
+      case "!=":
+        return alg.ne(left, right);
+      case "<":
+        return alg.lt(left, right);
+      case ">":
+        return alg.gt(left, right);
+      case "<=":
+        return alg.le(left, right);
+      case ">=":
+        return alg.ge(left, right);
+      default:
+        throw UnsupportedError(
+            'The operator ${query.operator.value} is not supported.');
+    }
+  }
+
+  @override
+  bool evalGroup(GroupQuery query) {
+    return query.child.eval(this);
+  }
+
+  @override
+  bool evalNot(NotQuery query) {
+    return !query.eval(this);
+  }
+
+  @override
+  bool evalOr(OrQuery query) {
+    for (final child in query.children) {
+      if (child.eval(this)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  @override
+  bool evalAnd(AndQuery query) {
+    for (final child in query.children) {
+      if (!child.eval(this)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+}
 
 /// Base interface for queries.
 abstract class Query {
@@ -76,6 +156,8 @@ abstract class Query {
 
 abstract class Literal {
   const Literal();
+
+  dynamic eval(QueryEvaluator evaluator);
 }
 
 /// Value expression.
@@ -88,8 +170,8 @@ class PrimitiveLiteral extends Literal {
     required this.position,
   });
 
-  // @override
-  // R eval<R>(QueryEvaluator<R> evaluator) => evaluator.evalValue(this);
+  @override
+  dynamic eval(QueryEvaluator evaluator) => value;
 
   @override
   String toString({bool debug = false}) => _debug(debug, value);
@@ -106,10 +188,8 @@ class SelectorLiteral extends Literal {
   });
 
   // TODO: If no match, indicate no match somehow.
-  dynamic eval(dynamic document) => selector
-      .apply(RootMatch(document, MatchingContext({}, Algebra.strict)))
-      .first
-      .value;
+  @override
+  List<dynamic> eval(QueryEvaluator evaluator) => evaluator.evalSelector(this);
 
   @override
   String toString({bool debug = false}) => _debug(debug, selector.toString());
@@ -140,6 +220,7 @@ class CompareQuery extends Query {
 /// Negates the [child] query. (bool NOT)
 class NotQuery extends Query {
   final Query child;
+
   const NotQuery({
     required this.child,
     required super.position,
@@ -155,6 +236,7 @@ class NotQuery extends Query {
 /// Groups the [child] query to override implicit precedence.
 class GroupQuery extends Query {
   final Query child;
+
   const GroupQuery({
     required this.child,
     required super.position,

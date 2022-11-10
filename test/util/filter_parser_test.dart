@@ -4,8 +4,8 @@ import 'package:lumberjack/util/filter_parser/grammar.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final grammarDef = FilterGrammarDefinition();
-  final grammar = grammarDef.build();
+  const grammarDef = FilterGrammarDefinition();
+  final grammar = grammarDef.build<Query>();
 
   group('Parser', () {
     test('parse primitives', () {
@@ -73,16 +73,16 @@ void main() {
       final res = grammar.parse(r"  .foo == 'bar' and .bin == 3 ");
       expect(res.isSuccess, isTrue);
       assert(res.value is AndQuery);
-      assert(res.value.children[0] is CompareQuery);
-      assert(res.value.children[1] is CompareQuery);
+      assert((res.value as AndQuery).children[0] is CompareQuery);
+      assert((res.value as AndQuery).children[1] is CompareQuery);
     });
 
     test('can parse an or query', () {
       final res = grammar.parse(r"   .foo == 'bar' or .bin == 3  ");
       expect(res.isSuccess, isTrue);
       assert(res.value is OrQuery);
-      assert(res.value.children[0] is CompareQuery);
-      assert(res.value.children[1] is CompareQuery);
+      assert((res.value as OrQuery).children[0] is CompareQuery);
+      assert((res.value as OrQuery).children[1] is CompareQuery);
     });
 
     test('can parse a group', () {
@@ -96,6 +96,93 @@ void main() {
       assert(res2.value is AndQuery);
       assert((res2.value as AndQuery).children[0] is CompareQuery);
       assert((res2.value as AndQuery).children[1] is GroupQuery);
+    });
+  });
+
+  group('Filter', () {
+    test('filter works on basic equality', () {
+      final result = grammar.parse('.foo == "bar"');
+      final doc = {"foo": "bar"};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(MatchEvaluator(doc));
+      expect(match, isTrue);
+    });
+
+    test('filter works on nested selectors', () {
+      final result = grammar.parse('.foo.bar == 3');
+      final doc = {
+        "foo": {"bar": 3}
+      };
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(MatchEvaluator(doc));
+      expect(match, isTrue);
+    });
+
+    test('filter fails on non matching doc', () {
+      final result = grammar.parse('.foo == "blah"');
+      final doc = {"foo": "bar"};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(MatchEvaluator(doc));
+      expect(match, isFalse);
+    });
+
+    test('filter fails gracefully with missing selector', () {
+      final result = grammar.parse('.flub == "blah"');
+      final doc = {"foo": "bar"};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(MatchEvaluator(doc));
+      expect(match, isFalse);
+    });
+
+    test('and expression filters', () {
+      final result = grammar.parse('.foo == "bar" and .bin == 3');
+      final doc = {"foo": "bar", "bin": 3};
+      expect(result.isSuccess, isTrue);
+      final match = result.value.eval(MatchEvaluator(doc));
+      expect(match, isTrue);
+
+      final result2 = grammar.parse('.foo == "bar" and .bin == 4');
+      expect(result2.isSuccess, isTrue);
+      final match2 = result2.value.eval(MatchEvaluator(doc));
+      expect(match2, isFalse);
+    });
+
+    test('or expression filters', () {
+      final filter = grammar.parse('.foo == "bar" or .bin == 3');
+      expect(filter.isSuccess, isTrue);
+
+      final doc1 = {"foo": "bar", "bin": 4};
+      final match = filter.value.eval(MatchEvaluator(doc1));
+      expect(match, isTrue);
+
+      final doc2 = {"foo": "quux", "bin": 3};
+      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      expect(match2, isTrue);
+
+      final doc3 = {"foo": "quux", "bin": 4};
+      final match3 = filter.value.eval(MatchEvaluator(doc3));
+      expect(match3, isFalse);
+    });
+
+    test('group expression filters', () {
+      final filter = grammar.parse('.foo == 1 or (.bin == 2 and .baz == 3)');
+      expect(filter.isSuccess, isTrue);
+
+      final doc1 = {"foo": 1, "bin": 4};
+      final match = filter.value.eval(MatchEvaluator(doc1));
+      expect(match, isTrue);
+
+      final doc2 = {"foo": 2, "bin": 2, "baz": 3};
+      final match2 = filter.value.eval(MatchEvaluator(doc2));
+      expect(match2, isTrue);
+
+      final doc3 = {"foo": "quux", "bin": 2};
+      final match3 = filter.value.eval(MatchEvaluator(doc3));
+      expect(match3, isFalse);
+
+      final doc4 = {"foo": "quux", "baz": 3};
+      final match4 = filter.value.eval(MatchEvaluator(doc4));
+      expect(match4, isFalse);
     });
   });
 }
